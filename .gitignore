@@ -219,10 +219,17 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# coinlet local cache (minute/hourly data, DuckDB cache)
+# coinlet local cache (DuckDB, minute/hourly data)
 .cache/coinlet/
+cache/
 *.duckdb
 *.duckdb.wal
 
 # Generated HTML plots (keep examples, ignore bulk output)
 cwt_*.html
+
+# Large data files (minute-level never committed)
+data/*_1m.parquet
+data/*_5m.parquet
+data/*_15m.parquet
+# Note: Daily Parquet files ARE committed (BTC-USD, ETH-USD)
