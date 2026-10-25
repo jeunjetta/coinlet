@@ -1,10 +1,18 @@
 """Parquet loading for WASM/Pyodide compatibility.
 
-Provides HTTP-based Parquet reading that works in browsers without
-DuckDB, websockets, or other native dependencies.
+Provides Parquet reading that works in browsers without DuckDB, websockets,
+or other native dependencies. Designed primarily for marimo WASM notebooks
+exported to GitHub Pages.
 
-Uses pyarrow for Parquet reading (available in Pyodide) with
-optional HTTP fetching via urllib or pyodide's fetch.
+Default behavior:
+1. Look for data files relative to the notebook location (for bundled assets)
+2. Fall back to HTTP URLs if explicitly provided
+
+For GitHub Pages / WASM export:
+- Bundle `data/*.parquet` files alongside the exported notebook
+- The loader automatically finds them via marimo's notebook_location()
+
+Uses pyarrow for Parquet reading (available in Pyodide).
 """
 
 from __future__ import annotations
@@ -20,34 +28,108 @@ logger = logging.getLogger(__name__)
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com"
 GITHUB_PAGES_BASE = "https://{owner}.github.io/{repo}"
 
+BUNDLED_DATASETS = {
+    "BTC-USD": "coinbase_BTC_USD_1d.parquet",
+    "ETH-USD": "coinbase_ETH_USD_1d.parquet",
+}
+
+
+def _get_notebook_data_dir() -> str | None:
+    """Get the data directory relative to the current marimo notebook.
+
+    In WASM/Pyodide, marimo's notebook_location() returns the URL base
+    where the notebook and its bundled assets are served.
+
+    Returns:
+        Base URL/path for data files, or None if not in a marimo context.
+    """
+    try:
+        import marimo as mo
+        base = mo.notebook_location()
+        if base:
+            if not base.endswith("/"):
+                base += "/"
+            return base + "data/"
+    except (ImportError, AttributeError):
+        pass
+    return None
+
 
 class ParquetLoader:
-    """Load Parquet files from local paths or HTTP URLs.
+    """Load Parquet files from bundled assets, local paths, or HTTP URLs.
 
-    Designed for WASM/Pyodide compatibility:
+    Designed for WASM/Pyodide compatibility in marimo notebooks:
+    - Default: loads from bundled assets relative to notebook location
+    - Override: explicit HTTP URLs or local paths
     - Uses only pandas + pyarrow (both available in Pyodide)
-    - Supports HTTP URLs for loading from GitHub raw/Pages
     - No DuckDB or other native dependencies
 
-    Example:
-        # In a marimo notebook running as WASM:
+    Example (marimo WASM notebook with bundled data):
         loader = ParquetLoader()
-        df = loader.load("https://raw.githubusercontent.com/user/coinlet/main/data/btc_usd_1d.parquet")
+        df = loader.load_symbol("BTC-USD")  # Loads from bundled data/
 
-        # Or with convenience methods:
-        df = loader.from_github_raw("user", "coinlet", "main", "data/btc_usd_1d.parquet")
+    Example (explicit path/URL override):
+        loader = ParquetLoader()
+        df = loader.load("https://example.com/data/btc.parquet")
+        df = loader.load("./local/data/btc.parquet")
+
+    For GitHub Pages export, bundle these files:
+        data/coinbase_BTC_USD_1d.parquet
+        data/coinbase_ETH_USD_1d.parquet
     """
 
-    def __init__(self, base_url: str | None = None):
+    def __init__(self, data_dir: str | Path | None = None):
         """Initialize loader.
 
         Args:
-            base_url: Optional base URL for relative paths
+            data_dir: Base directory/URL for data files. If None, auto-detects:
+                      - In marimo WASM: uses notebook_location() + "data/"
+                      - Otherwise: uses local "data/" directory
         """
-        self._base_url = base_url
+        self._data_dir = data_dir
+
+    def _resolve_data_dir(self) -> str:
+        """Resolve the data directory, with auto-detection."""
+        if self._data_dir is not None:
+            return str(self._data_dir)
+
+        notebook_dir = _get_notebook_data_dir()
+        if notebook_dir:
+            return notebook_dir
+
+        return "data/"
+
+    def load_symbol(self, symbol: str) -> pd.DataFrame:
+        """Load OHLCV data for a known symbol from bundled datasets.
+
+        This is the recommended method for WASM notebooks with bundled data.
+
+        Args:
+            symbol: Trading pair (e.g., "BTC-USD", "ETH-USD")
+
+        Returns:
+            DataFrame with UTC timestamp index and OHLCV columns
+
+        Raises:
+            ValueError: If symbol is not in bundled datasets
+        """
+        if symbol not in BUNDLED_DATASETS:
+            available = ", ".join(BUNDLED_DATASETS.keys())
+            raise ValueError(f"Unknown symbol: {symbol}. Available: {available}")
+
+        filename = BUNDLED_DATASETS[symbol]
+        data_dir = self._resolve_data_dir()
+
+        if data_dir.startswith(("http://", "https://")):
+            return self._load_from_url(data_dir + filename)
+        else:
+            return self._load_from_file(Path(data_dir) / filename)
 
     def load(self, path_or_url: str | Path) -> pd.DataFrame:
-        """Load Parquet file from path or URL.
+        """Load Parquet file from explicit path or URL.
+
+        Use this for custom data files or explicit URL overrides.
+        For bundled symbol data, prefer load_symbol().
 
         Args:
             path_or_url: Local path or HTTP(S) URL
@@ -156,8 +238,19 @@ class ParquetLoader:
         return self._load_from_url(url)
 
     @staticmethod
+    def list_bundled_symbols() -> list[str]:
+        """List symbols available in bundled datasets.
+
+        Returns:
+            List of symbol names (e.g., ["BTC-USD", "ETH-USD"])
+        """
+        return list(BUNDLED_DATASETS.keys())
+
+    @staticmethod
     def list_available_datasets(data_dir: str | Path = "data") -> list[dict]:
-        """List available Parquet files in data directory.
+        """List available Parquet files in a local data directory.
+
+        Note: This only works for local directories, not HTTP URLs.
 
         Args:
             data_dir: Directory to scan
@@ -182,7 +275,7 @@ class ParquetLoader:
 
 
 def load_parquet(path_or_url: str | Path) -> pd.DataFrame:
-    """Convenience function to load a Parquet file.
+    """Convenience function to load a Parquet file from path or URL.
 
     Args:
         path_or_url: Local path or HTTP URL
@@ -191,3 +284,20 @@ def load_parquet(path_or_url: str | Path) -> pd.DataFrame:
         DataFrame with UTC timestamp index and OHLCV columns
     """
     return ParquetLoader().load(path_or_url)
+
+
+def load_symbol(symbol: str) -> pd.DataFrame:
+    """Convenience function to load a bundled symbol's data.
+
+    This is the simplest way to load data in a WASM notebook:
+
+        from coinlet.data.parquet import load_symbol
+        df = load_symbol("BTC-USD")
+
+    Args:
+        symbol: Trading pair (e.g., "BTC-USD", "ETH-USD")
+
+    Returns:
+        DataFrame with UTC timestamp index and OHLCV columns
+    """
+    return ParquetLoader().load_symbol(symbol)

@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 
 import pandas as pd
+import pytest
 
 from coinlet.data.csv_source import CSVSource
 from coinlet.data.parquet import ParquetLoader, load_parquet
@@ -128,3 +129,31 @@ def test_load_parquet_convenience(tmp_path, sample_ohlcv_df):
     df = load_parquet(parquet_path)
 
     assert len(df) == len(sample_ohlcv_df)
+
+
+class TestParquetLoaderSymbols:
+    """Tests for bundled symbol loading."""
+
+    def test_list_bundled_symbols(self):
+        """Test listing bundled symbols."""
+        symbols = ParquetLoader.list_bundled_symbols()
+        assert "BTC-USD" in symbols
+        assert "ETH-USD" in symbols
+
+    def test_load_symbol_unknown(self):
+        """Test loading unknown symbol raises error."""
+        loader = ParquetLoader()
+        with pytest.raises(ValueError, match="Unknown symbol"):
+            loader.load_symbol("INVALID-USD")
+
+    def test_load_symbol_with_custom_data_dir(self, tmp_path, sample_ohlcv_df):
+        """Test loading symbol with custom data directory."""
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        parquet_path = data_dir / "coinbase_BTC_USD_1d.parquet"
+        sample_ohlcv_df.reset_index().to_parquet(parquet_path)
+
+        loader = ParquetLoader(data_dir=data_dir)
+        df = loader.load_symbol("BTC-USD")
+
+        assert len(df) == len(sample_ohlcv_df)
