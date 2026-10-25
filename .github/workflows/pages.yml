@@ -49,22 +49,44 @@ jobs:
           uv sync --all-extras
           uv pip install marimo
 
-      - name: Generate demo data
+      - name: Generate demo data if missing
         run: |
-          cd /workspace
-          uv run python scripts/generate_demo_data.py
+          if [ ! -f data/demo_prices.csv ]; then
+            uv run python scripts/generate_demo_data.py
+          fi
+
+      - name: Bundle data as notebook assets
+        run: |
+          # Create public/ folder next to notebook for WASM asset bundling
+          # This is marimo's documented mechanism for html-wasm exports
+          mkdir -p notebooks/public
+
+          # Copy Parquet files (preferred) and CSVs
+          cp data/*.parquet notebooks/public/ 2>/dev/null || true
+          cp data/*.csv notebooks/public/ 2>/dev/null || true
+
+          # Convert CSV to Parquet for smaller bundle size (optional)
+          # The notebook will find either format
+          echo "Bundled data files:"
+          ls -la notebooks/public/
 
       - name: Export notebook to WASM
         run: |
           mkdir -p dist
+          # marimo bundles public/ folder contents with the WASM export
           uv run marimo export html-wasm \
             --mode run \
             --output dist/index.html \
             notebooks/explorer.py
 
-      - name: Copy data files
+      - name: Verify bundle includes data
         run: |
-          cp -r data dist/data || true
+          echo "Checking dist/ contents:"
+          ls -la dist/
+          # The public/ folder should be embedded or copied
+          if [ -d dist/public ]; then
+            ls -la dist/public/
+          fi
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

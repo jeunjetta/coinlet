@@ -75,10 +75,15 @@ For public repos:
 ### Static Export (GitHub Pages)
 
 The notebook can be exported as a static WASM site for sharing. This mode:
-- Uses **cached data only** (committed CSV/Parquet in `data/`)
+- Uses **cached data only** (bundled from `notebooks/public/` or `data/`)
 - Does **not** support live WebSocket streaming
 - Requires GitHub Pages to be enabled (private repos need paid plan)
 - Publishes **publicly** even from a private repo
+
+**Data bundling**: The CI workflow copies `data/*.parquet` to `notebooks/public/` before
+export. marimo's `html-wasm` export bundles the `public/` folder with the notebook, so
+the WASM build can read data locally without fetching from GitHub (which wouldn't work
+for private repos anyway).
 
 To deploy manually:
 1. Enable Pages in repo Settings → Pages → Source: GitHub Actions

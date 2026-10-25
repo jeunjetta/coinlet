@@ -60,13 +60,41 @@ def __():
 
 @app.cell
 def __(mo, Path):
-    data_dir = Path("data") if Path("data").exists() else Path("../data")
+    def find_data_dir() -> Path:
+        """Find data directory, checking multiple locations for compatibility.
+
+        Search order:
+        1. public/ next to notebook (WASM export bundles data here)
+        2. data/ in current dir (running from repo root)
+        3. ../data/ (running from notebooks/)
+
+        The teammate's PR #5 loader will also look for Parquet files next to
+        the notebook by default, so public/ is the canonical location for bundled data.
+        """
+        notebook_dir = Path(mo.notebook_location()).parent if mo.notebook_location() else Path(".")
+
+        candidates = [
+            notebook_dir / "public",
+            Path("data"),
+            Path("../data"),
+            notebook_dir.parent / "data",
+        ]
+
+        for candidate in candidates:
+            if candidate.exists() and (
+                list(candidate.glob("*.csv")) or list(candidate.glob("*.parquet"))
+            ):
+                return candidate
+
+        return Path("data")
+
+    data_dir = find_data_dir()
     csv_files = list(data_dir.glob("*.csv")) + list(data_dir.glob("*.parquet"))
-    file_options = {f.name: str(f) for f in csv_files} if csv_files else {"demo": "demo"}
+    file_options = {f.name: str(f) for f in csv_files} if csv_files else {"demo (synthetic)": "demo"}
 
     data_source = mo.ui.dropdown(
         options=file_options,
-        value=list(file_options.keys())[0] if file_options else "demo",
+        value=list(file_options.keys())[0] if file_options else "demo (synthetic)",
         label="Data source",
     )
 
@@ -92,7 +120,7 @@ def __(mo, Path):
     )
 
     mo.md("### Controls")
-    return data_source, wavelet_type, preprocess_type, data_dir, csv_files, file_options
+    return data_source, wavelet_type, preprocess_type, data_dir, csv_files, file_options, find_data_dir
 
 
 @app.cell
