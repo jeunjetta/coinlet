@@ -148,12 +148,14 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+notebook = [
+    { name = "marimo" },
+]
+
+[package.dev-dependencies]
 dev = [
     { name = "pytest" },
     { name = "ruff" },
-]
-notebook = [
-    { name = "marimo" },
 ]
 
 [package.metadata]
@@ -163,11 +165,15 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.0" },
     { name = "plotly", specifier = ">=5.18" },
     { name = "pyarrow", specifier = ">=14.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4" },
     { name = "pywavelets", specifier = ">=1.4" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1" },
 ]
-provides-extras = ["dev", "notebook"]
+provides-extras = ["notebook"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=7.4" },
+    { name = "ruff", specifier = ">=0.1" },
+]
 
 [[package]]
 name = "colorama"
