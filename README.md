@@ -127,6 +127,101 @@ result = CWTResult.from_parquet("data/btc_cwt.parquet")
 key = result.cache_key()  # e.g., "a1b2c3d4e5f6g7h8"
 ```
 
+## Data Layer
+
+The `coinlet.data` package provides data fetching, caching, and live streaming.
+It implements the scaffold `Source` / `StreamBuffer` interface from PR #1
+(there is no separate `PriceSource` protocol — `PriceSource` is an alias of `Source`).
+
+### Data Sources
+
+```python
+from datetime import datetime, timezone
+from coinlet import StreamBuffer
+from coinlet.data import CoinbaseHistorical, CoinbaseSource, YahooFinanceSource, Granularity
+from coinlet.data.cache import PriceCache, fetch_with_cache
+
+# Historical OHLCV (also iterable as Source over close prices)
+source = CoinbaseHistorical()
+df = source.fetch_historical("BTC-USD", Granularity.ONE_DAY, start, end)
+series = StreamBuffer.from_source(source).to_series()  # replay closes
+
+# Yahoo Finance (crypto, stocks, indices)
+source = YahooFinanceSource()
+df = source.fetch_historical("BTC-USD", Granularity.ONE_DAY, start, end)
+
+# Live ticks as Source → StreamBuffer → cwt()
+live = CoinbaseSource("BTC-USD", max_samples=500)
+buffer = StreamBuffer.from_source(live)
+result = cwt(buffer.to_series(), periods)
+
+# With caching (only fetches missing date ranges)
+cache = PriceCache()  # .cache/coinlet/coinlet.duckdb (gitignored)
+df = fetch_with_cache(cache, source, "BTC-USD", Granularity.ONE_DAY, start, end)
+```
+
+### CLI
+
+```bash
+# Fetch historical data
+uv run coinlet fetch BTC-USD --granularity 1d --since 2015-01-01
+
+# Stream live data (1 minute)
+uv run coinlet stream BTC-USD ETH-USD --granularity 1m --duration 60
+```
+
+### Live Streaming
+
+```python
+from coinlet.data import CoinbaseLive, LiveDataManager, Granularity
+
+manager = LiveDataManager(
+    source=CoinbaseLive(),
+    symbols=["BTC-USD"],
+    granularity=Granularity.ONE_MINUTE,
+    window_size=100,
+)
+
+# Per-bar callback for continuous updates
+manager.on_bar(lambda bar: update_plot(bar))
+
+# Rolling-window snapshot (OHLCV bars)
+df = manager.get_snapshot()
+
+# Per-tick StreamBuffer (close prices for cwt)
+series = manager.get_tick_series()
+```
+
+### DuckDB Cache
+
+The cache stores prices and wavelet results in `.cache/coinlet/` (gitignored):
+
+```python
+from coinlet.data.cache import PriceCache
+
+cache = PriceCache()
+
+# Preferred: keyed by CWTResult.cache_key()
+if not cache.has_wavelet_result(result.cache_key()):
+    cache.save_cwt(result)
+
+result = cache.load_cwt(result.cache_key())
+```
+
+### WASM/Pyodide (for marimo notebooks)
+
+```python
+from coinlet.data.parquet import load_symbol
+
+# Load bundled dataset (auto-detects path via mo.notebook_location())
+df = load_symbol("BTC-USD")
+df = load_symbol("ETH-USD")
+```
+
+Files to bundle for WASM export:
+- `data/coinbase_BTC_USD_1d.parquet` (187 KB)
+- `data/coinbase_ETH_USD_1d.parquet` (163 KB)
+
 ## Data Storage
 
 | Data Type | Location | Git |
