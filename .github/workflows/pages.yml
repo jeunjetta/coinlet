@@ -1,0 +1,108 @@
+# Static WASM export of marimo notebook to GitHub Pages
+#
+# IMPORTANT: This workflow is MANUAL-ONLY (workflow_dispatch) because:
+# 1. The repo is private - GitHub Pages on private repos requires a paid plan
+# 2. Pages publishes content PUBLICLY even from a private repo
+# 3. The static build only supports cached data (no live WebSocket)
+#
+# To enable:
+# 1. Upgrade to GitHub Team/Enterprise (for private repo Pages)
+# 2. Go to Settings > Pages > Source: GitHub Actions
+# 3. Manually trigger this workflow from Actions tab
+#
+# For private/live analysis, use molab or local `uv run marimo edit/run`.
+
+name: Deploy to GitHub Pages (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_public:
+        description: 'Confirm this will publish PUBLICLY (type "yes")'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.confirm_public == 'yes' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: |
+          uv sync --all-extras
+          uv pip install marimo
+
+      - name: Generate demo data if missing
+        run: |
+          if [ ! -f data/demo_prices.csv ]; then
+            uv run python scripts/generate_demo_data.py
+          fi
+
+      - name: Bundle data as notebook assets
+        run: |
+          # Create public/ folder next to notebook for WASM asset bundling
+          # This is marimo's documented mechanism for html-wasm exports
+          mkdir -p notebooks/public
+
+          # Copy Parquet files (preferred) and CSVs
+          cp data/*.parquet notebooks/public/ 2>/dev/null || true
+          cp data/*.csv notebooks/public/ 2>/dev/null || true
+
+          # Convert CSV to Parquet for smaller bundle size (optional)
+          # The notebook will find either format
+          echo "Bundled data files:"
+          ls -la notebooks/public/
+
+      - name: Export notebook to WASM
+        run: |
+          mkdir -p dist
+          # marimo bundles public/ folder contents with the WASM export
+          uv run marimo export html-wasm \
+            --mode run \
+            --output dist/index.html \
+            notebooks/explorer.py
+
+      - name: Verify bundle includes data
+        run: |
+          echo "Checking dist/ contents:"
+          ls -la dist/
+          # The public/ folder should be embedded or copied
+          if [ -d dist/public ]; then
+            ls -la dist/public/
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

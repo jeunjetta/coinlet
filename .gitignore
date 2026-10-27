@@ -218,3 +218,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# coinlet local cache (minute/hourly data, DuckDB cache)
+.cache/coinlet/
+*.duckdb
+*.duckdb.wal
+
+# Generated HTML plots (keep examples, ignore bulk output)
+cwt_*.html
