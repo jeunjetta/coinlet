@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
+from coinlet.data.interfaces import StreamBuffer
 from coinlet.data.types import (
     GRANULARITY_SECONDS,
     Bar,
@@ -242,6 +243,7 @@ class LiveDataManager:
             sym: RollingBarWindow(granularity=granularity, max_bars=window_size)
             for sym in symbols
         }
+        self._tick_buffers: dict[str, StreamBuffer] = {sym: StreamBuffer() for sym in symbols}
 
         self._tick_callbacks: list[TickCallback] = []
         self._bar_callbacks: list[BarCallback] = []
@@ -286,6 +288,22 @@ class LiveDataManager:
         """
         return {sym: win.get_snapshot() for sym, win in self._windows.items()}
 
+    def get_tick_buffer(self, symbol: str | None = None) -> StreamBuffer:
+        """Return the StreamBuffer of raw ticks for a symbol.
+
+        This is the per-tick rolling window used with the scaffold Source
+        protocol (`buffer.to_series()` feeds `cwt()`).
+        """
+        if symbol is None:
+            symbol = self._symbols[0] if self._symbols else None
+        if symbol is None or symbol not in self._tick_buffers:
+            return StreamBuffer()
+        return self._tick_buffers[symbol]
+
+    def get_tick_series(self, symbol: str | None = None) -> pd.Series:
+        """Return accumulated tick prices as a Series for wavelet analysis."""
+        return self.get_tick_buffer(symbol).to_series()
+
     async def run(self) -> None:
         """Start streaming and processing ticks.
 
@@ -302,6 +320,11 @@ class LiveDataManager:
                     cb(tick)
                 except Exception as e:
                     logger.error(f"Tick callback error: {e}")
+
+            if tick.product_id in self._tick_buffers:
+                self._tick_buffers[tick.product_id].add(
+                    pd.Timestamp(tick.timestamp), tick.price
+                )
 
             if tick.product_id in self._windows:
                 completed = self._windows[tick.product_id].add_tick(tick)

@@ -12,13 +12,16 @@ from pathlib import Path
 
 import pandas as pd
 
+from coinlet.data.interfaces import SeriesReplay
 from coinlet.data.types import Granularity
 
 logger = logging.getLogger(__name__)
 
 
-class CSVSource:
+class CSVSource(SeriesReplay):
     """CSV file data source for importing/exporting OHLCV data.
+
+    Implements the scaffold `Source` protocol by replaying close prices.
 
     Expected CSV format:
     - First column: timestamp (ISO format or Unix epoch)
@@ -31,6 +34,7 @@ class CSVSource:
 
     def __init__(
         self,
+        filepath: str | Path | None = None,
         column_map: dict[str, str] | None = None,
         timestamp_column: str = "timestamp",
         timestamp_format: str | None = None,
@@ -38,14 +42,17 @@ class CSVSource:
         """Initialize CSV source.
 
         Args:
+            filepath: Optional CSV path used when iterating as a Source.
             column_map: Map from expected column names to actual names in CSV.
                        e.g., {"close": "value"} for single-value time series.
             timestamp_column: Name of timestamp column in CSV
             timestamp_format: strptime format for timestamps, or None for auto-detect
         """
+        self._filepath = filepath
         self._column_map = column_map or {}
         self._timestamp_col = timestamp_column
         self._timestamp_format = timestamp_format
+        self._replay_series = None
 
     def fetch_historical(
         self,
@@ -138,7 +145,18 @@ class CSVSource:
                 end = end.replace(tzinfo=timezone.utc)
             df = df[df.index <= end]
 
+        if not df.empty:
+            self._set_replay_series(df["close"])
         return df
+
+    def _load_replay_series(self) -> pd.Series:
+        series = getattr(self, "_replay_series", None)
+        if series is not None and not series.empty:
+            return series
+        if self._filepath is None:
+            return super()._load_replay_series()
+        df = self.load(self._filepath)
+        return df["close"]
 
     @staticmethod
     def save(

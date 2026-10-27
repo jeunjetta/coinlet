@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CACHE_DIR = Path("cache")
+DEFAULT_CACHE_DIR = Path(".cache/coinlet")
 DEFAULT_DATA_DIR = Path("data")
 
 
@@ -49,7 +49,7 @@ class PriceCache:
 
         Args:
             db_path: Path to DuckDB file, or None for in-memory
-            cache_dir: Directory for DuckDB file (default: cache/)
+            cache_dir: Directory for DuckDB file (default: .cache/coinlet/)
             data_dir: Directory for Parquet exports (default: data/)
         """
         self._cache_dir = Path(cache_dir) if cache_dir else DEFAULT_CACHE_DIR
@@ -417,6 +417,51 @@ class PriceCache:
         content = df.to_csv().encode("utf-8")
         return hashlib.sha256(content).hexdigest()[:16]
 
+    def save_cwt(self, result: Any) -> str:
+        """Save a CWTResult using its cache_key().
+
+        Imports transform only here so this module stays separate from
+        coinlet.transform at import time.
+
+        Returns:
+            The cache_key that was stored.
+        """
+        from coinlet.transform import CWTResult
+
+        if not isinstance(result, CWTResult):
+            raise TypeError(f"expected CWTResult, got {type(result)!r}")
+
+        cache_key = result.cache_key()
+        meta = result.metadata or {}
+        tmp = Path(self._cache_dir) / f"{cache_key}.parquet"
+        tmp.parent.mkdir(parents=True, exist_ok=True)
+        result.to_parquet(tmp)
+        payload = tmp.read_bytes()
+        tmp.unlink(missing_ok=True)
+        self.save_wavelet_result(
+            cache_key=cache_key,
+            data_hash=cache_key,
+            wavelet_type=str(meta.get("wavelet", "")),
+            params=meta,
+            result=payload,
+        )
+        return cache_key
+
+    def load_cwt(self, cache_key: str) -> Any | None:
+        """Load a CWTResult previously stored with save_cwt()."""
+        from coinlet.transform import CWTResult
+
+        payload = self.load_wavelet_result(cache_key)
+        if payload is None:
+            return None
+        tmp = Path(self._cache_dir) / f"{cache_key}.parquet"
+        tmp.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_bytes(payload)
+        try:
+            return CWTResult.from_parquet(tmp)
+        finally:
+            tmp.unlink(missing_ok=True)
+
 
 def fetch_with_cache(
     cache: PriceCache,
@@ -432,7 +477,7 @@ def fetch_with_cache(
 
     Args:
         cache: PriceCache instance
-        source: PriceSource implementation
+        source: Historical fetcher with source_name and fetch_historical()
         symbol: Trading pair
         granularity: Candle interval
         start: Start time

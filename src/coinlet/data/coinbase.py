@@ -4,6 +4,8 @@ Historical: Public REST API (no auth required)
 Live: Public WebSocket feed (no auth required)
 
 API docs: https://docs.cloud.coinbase.com/exchange/reference
+
+Implements the scaffold's `Source` protocol for streaming integration.
 """
 
 from __future__ import annotations
@@ -12,12 +14,13 @@ import asyncio
 import json
 import logging
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 import pandas as pd
 
+from coinlet.data.interfaces import SeriesReplay
 from coinlet.data.types import (
     COINBASE_GRANULARITY_MAP,
     GRANULARITY_SECONDS,
@@ -38,8 +41,11 @@ MAX_CANDLES_PER_REQUEST = 300
 RATE_LIMIT_DELAY = 0.12  # ~8 requests/sec to stay under public rate limits
 
 
-class CoinbaseHistorical:
+class CoinbaseHistorical(SeriesReplay):
     """Coinbase Exchange historical candle data via public REST API.
+
+    Implements the scaffold `Source` protocol by replaying close prices
+    after a fetch (or when constructed with symbol/start).
 
     No authentication required. Respects rate limits with configurable delay.
     Handles pagination for large date ranges (max 300 candles per request).
@@ -47,9 +53,21 @@ class CoinbaseHistorical:
 
     source_name = "coinbase"
 
-    def __init__(self, rate_limit_delay: float = RATE_LIMIT_DELAY):
+    def __init__(
+        self,
+        symbol: str | None = None,
+        granularity: Granularity = Granularity.ONE_DAY,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        rate_limit_delay: float = RATE_LIMIT_DELAY,
+    ):
+        self._symbol = symbol
+        self._granularity = granularity
+        self._start = start
+        self._end = end
         self._delay = rate_limit_delay
         self._session: requests.Session | None = None
+        self._replay_series = None
 
     def _get_session(self) -> "requests.Session":
         if self._session is None:
@@ -158,7 +176,20 @@ class CoinbaseHistorical:
             if current_start < end:
                 time.sleep(self._delay)
 
-        return ohlcv_list_to_dataframe(all_candles)
+        df = ohlcv_list_to_dataframe(all_candles)
+        if not df.empty:
+            self._set_replay_series(df["close"])
+        return df
+
+    def _load_replay_series(self) -> pd.Series:
+        series = getattr(self, "_replay_series", None)
+        if series is not None and not series.empty:
+            return series
+        if self._symbol is None:
+            return super()._load_replay_series()
+        start = self._start or datetime(2015, 1, 1, tzinfo=timezone.utc)
+        df = self.fetch_historical(self._symbol, self._granularity, start, self._end)
+        return df["close"]
 
     def close(self):
         """Close the session."""
@@ -271,3 +302,66 @@ class CoinbaseLive:
             pass
         finally:
             loop.close()
+
+
+class CoinbaseSource:
+    """Coinbase live data source implementing the scaffold's Source protocol.
+
+    This class yields (timestamp, price) tuples for use with StreamBuffer
+    and the wavelet transform pipeline.
+
+    Example:
+        from coinlet import StreamBuffer
+        from coinlet.data import CoinbaseSource
+
+        source = CoinbaseSource("BTC-USD", max_samples=1000)
+        buffer = StreamBuffer.from_source(source)
+        series = buffer.to_series()
+    """
+
+    def __init__(
+        self,
+        symbol: str,
+        max_samples: int | None = None,
+        reconnect_delay: float = 1.0,
+    ):
+        """Initialize Coinbase source.
+
+        Args:
+            symbol: Trading pair (e.g., 'BTC-USD')
+            max_samples: Maximum samples to yield (None for infinite)
+            reconnect_delay: Initial reconnect delay in seconds
+        """
+        self._symbol = symbol
+        self._max_samples = max_samples
+        self._live = CoinbaseLive(reconnect_delay=reconnect_delay)
+        self._iter: Iterator[tuple[pd.Timestamp, float]] | None = None
+        self._count = 0
+
+    def __iter__(self) -> Iterator[tuple[pd.Timestamp, float]]:
+        """Return iterator."""
+        self._count = 0
+        return self
+
+    def __next__(self) -> tuple[pd.Timestamp, float]:
+        """Get next (timestamp, price) tuple.
+
+        Returns:
+            Tuple of (pandas Timestamp, price as float)
+
+        Raises:
+            StopIteration: When max_samples reached
+        """
+        if self._max_samples is not None and self._count >= self._max_samples:
+            raise StopIteration
+
+        if self._iter is None:
+            self._iter = self._create_sync_iter()
+
+        tick = next(self._iter)
+        self._count += 1
+        return pd.Timestamp(tick.timestamp), tick.price
+
+    def _create_sync_iter(self) -> Iterator[Tick]:
+        """Create synchronous tick iterator."""
+        return self._live.stream_ticks_sync([self._symbol])

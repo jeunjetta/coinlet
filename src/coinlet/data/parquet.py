@@ -34,25 +34,40 @@ BUNDLED_DATASETS = {
 }
 
 
-def _get_notebook_data_dir() -> str | None:
-    """Get the data directory relative to the current marimo notebook.
-
-    In WASM/Pyodide, marimo's notebook_location() returns the URL base
-    where the notebook and its bundled assets are served.
-
-    Returns:
-        Base URL/path for data files, or None if not in a marimo context.
-    """
+def _notebook_dir() -> Path | None:
+    """Directory of the current marimo notebook, if any."""
     try:
         import marimo as mo
-        base = mo.notebook_location()
-        if base:
-            if not base.endswith("/"):
-                base += "/"
-            return base + "data/"
+
+        loc = mo.notebook_location()
+        if loc:
+            return Path(str(loc)).parent
     except (ImportError, AttributeError):
         pass
     return None
+
+
+def _candidate_data_dirs(explicit: str | Path | None = None) -> list[str]:
+    """Search order for bundled Parquet files.
+
+    1. Explicit data_dir if provided
+    2. public/ next to the notebook (WASM / GitHub Pages export)
+    3. data/ next to the notebook
+    4. ./data (repo root)
+    5. ../data (running from notebooks/)
+    """
+    dirs: list[str] = []
+    if explicit is not None:
+        dirs.append(str(explicit))
+
+    notebook_dir = _notebook_dir()
+    if notebook_dir is not None:
+        dirs.append(str(notebook_dir / "public"))
+        dirs.append(str(notebook_dir / "data"))
+        dirs.append(str(notebook_dir.parent / "data"))
+
+    dirs.extend(["data", "../data"])
+    return dirs
 
 
 class ParquetLoader:
@@ -82,9 +97,9 @@ class ParquetLoader:
         """Initialize loader.
 
         Args:
-            data_dir: Base directory/URL for data files. If None, auto-detects:
-                      - In marimo WASM: uses notebook_location() + "data/"
-                      - Otherwise: uses local "data/" directory
+            data_dir: Base directory/URL for data files. If None, auto-detects
+                      public/ and data/ relative to the notebook (see
+                      `_candidate_data_dirs`).
         """
         self._data_dir = data_dir
 
@@ -93,11 +108,16 @@ class ParquetLoader:
         if self._data_dir is not None:
             return str(self._data_dir)
 
-        notebook_dir = _get_notebook_data_dir()
-        if notebook_dir:
-            return notebook_dir
+        for candidate in _candidate_data_dirs():
+            if candidate.startswith(("http://", "https://")):
+                return candidate if candidate.endswith("/") else candidate + "/"
+            path = Path(candidate)
+            if path.exists() and (
+                list(path.glob("*.parquet")) or list(path.glob("*.csv"))
+            ):
+                return str(path)
 
-        return "data/"
+        return "data"
 
     def load_symbol(self, symbol: str) -> pd.DataFrame:
         """Load OHLCV data for a known symbol from bundled datasets.

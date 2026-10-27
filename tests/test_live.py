@@ -176,3 +176,19 @@ class TestRollingBarWindow:
         window.add_tick(tick_final)
 
         assert window.bar_count == 5
+
+
+class TestLiveDataManagerBuffer:
+    """StreamBuffer integration for the per-tick live mode."""
+
+    def test_tick_buffer_starts_empty(self):
+        from coinlet.data.live import LiveDataManager
+
+        manager = LiveDataManager(
+            source=None,
+            symbols=["BTC-USD"],
+            granularity=Granularity.ONE_MINUTE,
+        )
+        buffer = manager.get_tick_buffer("BTC-USD")
+        assert len(buffer) == 0
+        assert len(manager.get_tick_series("BTC-USD")) == 0

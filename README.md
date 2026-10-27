@@ -129,25 +129,34 @@ key = result.cache_key()  # e.g., "a1b2c3d4e5f6g7h8"
 
 ## Data Layer
 
-The `coinlet.data` subpackage provides data fetching, caching, and live streaming.
+The `coinlet.data` package provides data fetching, caching, and live streaming.
+It implements the scaffold `Source` / `StreamBuffer` interface from PR #1
+(there is no separate `PriceSource` protocol — `PriceSource` is an alias of `Source`).
 
 ### Data Sources
 
 ```python
 from datetime import datetime, timezone
-from coinlet.data import CoinbaseHistorical, YahooFinanceSource, Granularity
+from coinlet import StreamBuffer
+from coinlet.data import CoinbaseHistorical, CoinbaseSource, YahooFinanceSource, Granularity
 from coinlet.data.cache import PriceCache, fetch_with_cache
 
-# Coinbase Exchange (historical, no auth required)
+# Historical OHLCV (also iterable as Source over close prices)
 source = CoinbaseHistorical()
 df = source.fetch_historical("BTC-USD", Granularity.ONE_DAY, start, end)
+series = StreamBuffer.from_source(source).to_series()  # replay closes
 
 # Yahoo Finance (crypto, stocks, indices)
 source = YahooFinanceSource()
 df = source.fetch_historical("BTC-USD", Granularity.ONE_DAY, start, end)
 
+# Live ticks as Source → StreamBuffer → cwt()
+live = CoinbaseSource("BTC-USD", max_samples=500)
+buffer = StreamBuffer.from_source(live)
+result = cwt(buffer.to_series(), periods)
+
 # With caching (only fetches missing date ranges)
-cache = PriceCache()
+cache = PriceCache()  # .cache/coinlet/coinlet.duckdb (gitignored)
 df = fetch_with_cache(cache, source, "BTC-USD", Granularity.ONE_DAY, start, end)
 ```
 
@@ -176,28 +185,27 @@ manager = LiveDataManager(
 # Per-bar callback for continuous updates
 manager.on_bar(lambda bar: update_plot(bar))
 
-# Rolling window snapshot for wavelet analysis
+# Rolling-window snapshot (OHLCV bars)
 df = manager.get_snapshot()
+
+# Per-tick StreamBuffer (close prices for cwt)
+series = manager.get_tick_series()
 ```
 
 ### DuckDB Cache
 
-The cache stores prices and wavelet results locally:
+The cache stores prices and wavelet results in `.cache/coinlet/` (gitignored):
 
 ```python
-from coinlet.data import PriceCache
+from coinlet.data.cache import PriceCache
 
 cache = PriceCache()
 
-# Wavelet results (keyed by CWTResult.cache_key())
+# Preferred: keyed by CWTResult.cache_key()
 if not cache.has_wavelet_result(result.cache_key()):
-    cache.save_wavelet_result(
-        cache_key=result.cache_key(),
-        data_hash=cache.compute_data_hash(df),
-        wavelet_type="morlet",
-        params={"omega0": 6.0},
-        result=result.to_parquet_bytes(),
-    )
+    cache.save_cwt(result)
+
+result = cache.load_cwt(result.cache_key())
 ```
 
 ### WASM/Pyodide (for marimo notebooks)

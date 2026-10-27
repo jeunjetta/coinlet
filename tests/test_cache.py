@@ -138,6 +138,42 @@ class TestPriceCache:
         finally:
             cache.close()
 
+    def test_save_and_load_cwt(self, temp_cache_dir):
+        """Wavelet results are keyed by CWTResult.cache_key()."""
+        import numpy as np
+
+        from coinlet.transform import CWTResult
+
+        cache = PriceCache(db_path=temp_cache_dir / "test.duckdb", cache_dir=temp_cache_dir)
+        result = CWTResult(
+            times=np.array(["2024-01-01", "2024-01-02"], dtype="datetime64[D]"),
+            periods=np.array([7.0, 14.0]),
+            power=np.array([[1.0, 2.0], [3.0, 4.0]]),
+            coi_mask=np.array([[False, False], [True, True]]),
+            metadata={"wavelet": "cmor1.5-1.0", "preprocess": "none"},
+        )
+        try:
+            key = cache.save_cwt(result)
+            assert key == result.cache_key()
+            assert cache.has_wavelet_result(key)
+            loaded = cache.load_cwt(key)
+            assert loaded is not None
+            assert np.allclose(loaded.power, result.power)
+            assert np.allclose(loaded.periods, result.periods)
+            assert loaded.metadata == result.metadata
+            # Different params → different key
+            other = CWTResult(
+                times=result.times,
+                periods=np.array([8.0, 16.0]),
+                power=result.power,
+                coi_mask=result.coi_mask,
+                metadata={"wavelet": "mexh", "preprocess": "none"},
+            )
+            assert other.cache_key() != key
+            assert not cache.has_wavelet_result(other.cache_key())
+        finally:
+            cache.close()
+
     def test_compute_data_hash(self, sample_ohlcv_df):
         """Test data hash computation."""
         hash1 = PriceCache.compute_data_hash(sample_ohlcv_df)

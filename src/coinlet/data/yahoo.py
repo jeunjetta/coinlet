@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
+from coinlet.data.interfaces import SeriesReplay
 from coinlet.data.types import Granularity
 
 if TYPE_CHECKING:
@@ -29,8 +30,10 @@ GRANULARITY_TO_YFINANCE: dict[Granularity, str] = {
 }
 
 
-class YahooFinanceSource:
+class YahooFinanceSource(SeriesReplay):
     """Yahoo Finance historical data source.
+
+    Implements the scaffold `Source` protocol by replaying close prices.
 
     Works for crypto (BTC-USD, ETH-USD), stocks, indices, etc.
     Note: yfinance has limitations on intraday data history.
@@ -38,8 +41,19 @@ class YahooFinanceSource:
 
     source_name = "yahoo"
 
-    def __init__(self):
+    def __init__(
+        self,
+        symbol: str | None = None,
+        granularity: Granularity = Granularity.ONE_DAY,
+        start: datetime | None = None,
+        end: datetime | None = None,
+    ):
+        self._symbol = symbol
+        self._granularity = granularity
+        self._start = start
+        self._end = end
         self._yf: "yfinance" | None = None
+        self._replay_series = None
 
     def _get_yf(self):
         if self._yf is None:
@@ -120,4 +134,16 @@ class YahooFinanceSource:
                 "volume": "sum",
             }).dropna()
 
+        if not df.empty:
+            self._set_replay_series(df["close"])
         return df
+
+    def _load_replay_series(self) -> pd.Series:
+        series = getattr(self, "_replay_series", None)
+        if series is not None and not series.empty:
+            return series
+        if self._symbol is None:
+            return super()._load_replay_series()
+        start = self._start or datetime(2015, 1, 1, tzinfo=timezone.utc)
+        df = self.fetch_historical(self._symbol, self._granularity, start, self._end)
+        return df["close"]
