@@ -102,6 +102,7 @@ jobs:
     name: CodeQL
     runs-on: ubuntu-latest
     permissions:
+      actions: read           # Required for workflow run info
       contents: read          # Required for checkout
       security-events: write  # Required for CodeQL
     steps:
