@@ -1,6 +1,6 @@
 """Tests for live data handling."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -16,7 +16,7 @@ class TestBarBuilder:
         builder = BarBuilder(interval_secs=60)
 
         tick = Tick(
-            timestamp=datetime(2024, 1, 1, 12, 0, 30, tzinfo=timezone.utc),
+            timestamp=datetime(2024, 1, 1, 12, 0, 30, tzinfo=UTC),
             price=50000.0,
             size=0.1,
             side="buy",
@@ -36,7 +36,7 @@ class TestBarBuilder:
         builder = BarBuilder(interval_secs=60)
 
         def ts(m, s):
-            return datetime(2024, 1, 1, 12, m, s, tzinfo=timezone.utc)
+            return datetime(2024, 1, 1, 12, m, s, tzinfo=UTC)
 
         ticks = [
             Tick(ts(0, 10), 50000.0, 0.1, "buy", "BTC-USD"),
@@ -61,28 +61,28 @@ class TestBarBuilder:
         """Test bar completion on new interval."""
         builder = BarBuilder(interval_secs=60)
 
-        ts1 = datetime(2024, 1, 1, 12, 0, 30, tzinfo=timezone.utc)
+        ts1 = datetime(2024, 1, 1, 12, 0, 30, tzinfo=UTC)
         tick1 = Tick(ts1, 50000.0, 0.1, "buy", "BTC-USD")
         builder.add_tick(tick1)
 
-        ts2 = datetime(2024, 1, 1, 12, 1, 10, tzinfo=timezone.utc)
+        ts2 = datetime(2024, 1, 1, 12, 1, 10, tzinfo=UTC)
         tick2 = Tick(ts2, 50100.0, 0.2, "buy", "BTC-USD")
         completed = builder.add_tick(tick2)
 
         assert completed is not None
-        assert completed.timestamp == datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        assert completed.timestamp == datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
         assert completed.close == 50000.0
         assert completed.tick_count == 1
 
         current = builder.get_current_bar()
-        assert current.timestamp == datetime(2024, 1, 1, 12, 1, 0, tzinfo=timezone.utc)
+        assert current.timestamp == datetime(2024, 1, 1, 12, 1, 0, tzinfo=UTC)
         assert current.close == 50100.0
 
     def test_flush(self):
         """Test flushing incomplete bar."""
         builder = BarBuilder(interval_secs=60)
 
-        ts = datetime(2024, 1, 1, 12, 0, 30, tzinfo=timezone.utc)
+        ts = datetime(2024, 1, 1, 12, 0, 30, tzinfo=UTC)
         tick = Tick(ts, 50000.0, 0.1, "buy", "BTC-USD")
         builder.add_tick(tick)
 
@@ -103,7 +103,7 @@ class TestRollingBarWindow:
         for i in range(5):
             for j in range(3):
                 tick = Tick(
-                    timestamp=datetime(2024, 1, 1, 12, i, j * 20, tzinfo=timezone.utc),
+                    timestamp=datetime(2024, 1, 1, 12, i, j * 20, tzinfo=UTC),
                     price=50000.0 + i * 100 + j,
                     size=0.1,
                     side="buy",
@@ -112,7 +112,7 @@ class TestRollingBarWindow:
                 window.add_tick(tick)
 
         tick_next = Tick(
-            timestamp=datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc),
+            timestamp=datetime(2024, 1, 1, 12, 5, 0, tzinfo=UTC),
             price=50500.0,
             size=0.1,
             side="buy",
@@ -128,7 +128,7 @@ class TestRollingBarWindow:
 
         for i in range(3):
             tick = Tick(
-                timestamp=datetime(2024, 1, 1, 12, i, 30, tzinfo=timezone.utc),
+                timestamp=datetime(2024, 1, 1, 12, i, 30, tzinfo=UTC),
                 price=50000.0 + i * 100,
                 size=0.1,
                 side="buy",
@@ -137,7 +137,7 @@ class TestRollingBarWindow:
             window.add_tick(tick)
 
         tick_final = Tick(
-            timestamp=datetime(2024, 1, 1, 12, 3, 0, tzinfo=timezone.utc),
+            timestamp=datetime(2024, 1, 1, 12, 3, 0, tzinfo=UTC),
             price=50300.0,
             size=0.1,
             side="buy",
@@ -158,7 +158,7 @@ class TestRollingBarWindow:
 
         for i in range(10):
             tick = Tick(
-                timestamp=datetime(2024, 1, 1, 12, i, 30, tzinfo=timezone.utc),
+                timestamp=datetime(2024, 1, 1, 12, i, 30, tzinfo=UTC),
                 price=50000.0,
                 size=0.1,
                 side="buy",
@@ -167,7 +167,7 @@ class TestRollingBarWindow:
             window.add_tick(tick)
 
         tick_final = Tick(
-            timestamp=datetime(2024, 1, 1, 12, 10, 0, tzinfo=timezone.utc),
+            timestamp=datetime(2024, 1, 1, 12, 10, 0, tzinfo=UTC),
             price=50000.0,
             size=0.1,
             side="buy",

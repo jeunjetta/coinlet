@@ -1,6 +1,6 @@
 """Tests for CSV source and Parquet loader."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pandas as pd
 import pytest
@@ -28,11 +28,13 @@ class TestCSVSource:
     def test_load_with_column_map(self, tmp_path):
         """Test loading CSV with custom column names."""
         csv_path = tmp_path / "test.csv"
-        pd.DataFrame({
-            "time": pd.date_range("2024-01-01", periods=5, freq="D"),
-            "price": [100, 101, 102, 103, 104],
-            "qty": [1000, 1100, 1200, 1300, 1400],
-        }).to_csv(csv_path, index=False)
+        pd.DataFrame(
+            {
+                "time": pd.date_range("2024-01-01", periods=5, freq="D"),
+                "price": [100, 101, 102, 103, 104],
+                "qty": [1000, 1100, 1200, 1300, 1400],
+            }
+        ).to_csv(csv_path, index=False)
 
         source = CSVSource(
             column_map={"close": "price", "volume": "qty"},
@@ -66,8 +68,8 @@ class TestCSVSource:
         sample_ohlcv_df.to_csv(csv_path)
 
         source = CSVSource()
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 5, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 5, tzinfo=UTC)
 
         df = source.fetch_historical(str(csv_path), Granularity.ONE_DAY, start, end)
 

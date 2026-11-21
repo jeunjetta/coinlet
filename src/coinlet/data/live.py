@@ -11,7 +11,7 @@ import logging
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -47,7 +47,7 @@ class BarBuilder:
         """Calculate the bar start time for a given timestamp."""
         epoch = ts.timestamp()
         bar_epoch = (int(epoch) // self.interval_secs) * self.interval_secs
-        return datetime.fromtimestamp(bar_epoch, tz=timezone.utc)
+        return datetime.fromtimestamp(bar_epoch, tz=UTC)
 
     def add_tick(self, tick: Tick) -> Bar | None:
         """Add a tick and return completed bar if interval elapsed.
@@ -169,14 +169,16 @@ class RollingBarWindow:
 
         data = []
         for bar in self._bars:
-            data.append({
-                "timestamp": bar.timestamp,
-                "open": bar.open,
-                "high": bar.high,
-                "low": bar.low,
-                "close": bar.close,
-                "volume": bar.volume,
-            })
+            data.append(
+                {
+                    "timestamp": bar.timestamp,
+                    "open": bar.open,
+                    "high": bar.high,
+                    "low": bar.low,
+                    "close": bar.close,
+                    "volume": bar.volume,
+                }
+            )
 
         df = pd.DataFrame(data)
         df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
@@ -222,7 +224,7 @@ class LiveDataManager:
 
     def __init__(
         self,
-        source: "CoinbaseLive",
+        source: CoinbaseLive,
         symbols: list[str],
         granularity: Granularity,
         window_size: int = 100,
@@ -240,8 +242,7 @@ class LiveDataManager:
         self._granularity = granularity
 
         self._windows: dict[str, RollingBarWindow] = {
-            sym: RollingBarWindow(granularity=granularity, max_bars=window_size)
-            for sym in symbols
+            sym: RollingBarWindow(granularity=granularity, max_bars=window_size) for sym in symbols
         }
         self._tick_buffers: dict[str, StreamBuffer] = {sym: StreamBuffer() for sym in symbols}
 
@@ -322,9 +323,7 @@ class LiveDataManager:
                     logger.error(f"Tick callback error: {e}")
 
             if tick.product_id in self._tick_buffers:
-                self._tick_buffers[tick.product_id].add(
-                    pd.Timestamp(tick.timestamp), tick.price
-                )
+                self._tick_buffers[tick.product_id].add(pd.Timestamp(tick.timestamp), tick.price)
 
             if tick.product_id in self._windows:
                 completed = self._windows[tick.product_id].add_tick(tick)

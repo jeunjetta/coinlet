@@ -7,7 +7,7 @@ including crypto (BTC-USD, ETH-USD), stocks, indices, etc.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -52,12 +52,13 @@ class YahooFinanceSource(SeriesReplay):
         self._granularity = granularity
         self._start = start
         self._end = end
-        self._yf: "yfinance" | None = None
+        self._yf: yfinance | None = None
         self._replay_series = None
 
     def _get_yf(self):
         if self._yf is None:
             import yfinance
+
             self._yf = yfinance
         return self._yf
 
@@ -82,12 +83,12 @@ class YahooFinanceSource(SeriesReplay):
         yf = self._get_yf()
 
         if end is None:
-            end = datetime.now(timezone.utc)
+            end = datetime.now(UTC)
 
         if start.tzinfo is None:
-            start = start.replace(tzinfo=timezone.utc)
+            start = start.replace(tzinfo=UTC)
         if end.tzinfo is None:
-            end = end.replace(tzinfo=timezone.utc)
+            end = end.replace(tzinfo=UTC)
 
         yf_interval = GRANULARITY_TO_YFINANCE[granularity]
         needs_resample = granularity == Granularity.SIX_HOURS
@@ -108,13 +109,15 @@ class YahooFinanceSource(SeriesReplay):
         if df.empty:
             return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
 
-        df = df.rename(columns={
-            "Open": "open",
-            "High": "high",
-            "Low": "low",
-            "Close": "close",
-            "Volume": "volume",
-        })
+        df = df.rename(
+            columns={
+                "Open": "open",
+                "High": "high",
+                "Low": "low",
+                "Close": "close",
+                "Volume": "volume",
+            }
+        )
 
         df = df[["open", "high", "low", "close", "volume"]]
 
@@ -126,13 +129,19 @@ class YahooFinanceSource(SeriesReplay):
         df.index.name = "timestamp"
 
         if needs_resample:
-            df = df.resample("6h").agg({
-                "open": "first",
-                "high": "max",
-                "low": "min",
-                "close": "last",
-                "volume": "sum",
-            }).dropna()
+            df = (
+                df.resample("6h")
+                .agg(
+                    {
+                        "open": "first",
+                        "high": "max",
+                        "low": "min",
+                        "close": "last",
+                        "volume": "sum",
+                    }
+                )
+                .dropna()
+            )
 
         if not df.empty:
             self._set_replay_series(df["close"])
@@ -144,6 +153,6 @@ class YahooFinanceSource(SeriesReplay):
             return series
         if self._symbol is None:
             return super()._load_replay_series()
-        start = self._start or datetime(2015, 1, 1, tzinfo=timezone.utc)
+        start = self._start or datetime(2015, 1, 1, tzinfo=UTC)
         df = self.fetch_historical(self._symbol, self._granularity, start, self._end)
         return df["close"]

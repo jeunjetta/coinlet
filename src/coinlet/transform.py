@@ -58,12 +58,14 @@ class CWTResult:
         power_flat = self.power.flatten()
         coi_flat = self.coi_mask.flatten()
 
-        df = pd.DataFrame({
-            "time": times_repeated,
-            "period": periods_repeated,
-            "power": power_flat,
-            "in_coi": coi_flat,
-        })
+        df = pd.DataFrame(
+            {
+                "time": times_repeated,
+                "period": periods_repeated,
+                "power": power_flat,
+                "in_coi": coi_flat,
+            }
+        )
         if self.metadata:
             df.attrs["metadata"] = self.metadata
         return df

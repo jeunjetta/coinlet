@@ -1,6 +1,6 @@
 """Tests that historical and live sources implement the scaffold Source protocol."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pandas as pd
@@ -37,8 +37,8 @@ def test_coinbase_historical_is_source_after_fetch(sample_coinbase_response):
     mock_session.get.return_value = mock_response
     source._session = mock_session
 
-    start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-    end = datetime(2024, 1, 4, tzinfo=timezone.utc)
+    start = datetime(2024, 1, 1, tzinfo=UTC)
+    end = datetime(2024, 1, 4, tzinfo=UTC)
     df = source.fetch_historical("BTC-USD", Granularity.ONE_DAY, start, end)
 
     assert isinstance(source, Source)
@@ -67,14 +67,14 @@ def test_coinbase_source_is_source():
 
     ticks = [
         Tick(
-            timestamp=datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+            timestamp=datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC),
             price=50000.0,
             size=0.1,
             side="buy",
             product_id="BTC-USD",
         ),
         Tick(
-            timestamp=datetime(2024, 1, 1, 12, 0, 1, tzinfo=timezone.utc),
+            timestamp=datetime(2024, 1, 1, 12, 0, 1, tzinfo=UTC),
             price=50010.0,
             size=0.2,
             side="sell",

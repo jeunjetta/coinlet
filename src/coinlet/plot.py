@@ -303,9 +303,7 @@ def update_surface_data(fig: go.Figure, result: CWTResult) -> go.Figure:
     return fig
 
 
-def update_scalogram_data(
-    fig: go.Figure, result: CWTResult, show_coi: bool = True
-) -> go.Figure:
+def update_scalogram_data(fig: go.Figure, result: CWTResult, show_coi: bool = True) -> go.Figure:
     """Update an existing scalogram figure with new data (for live mode)."""
     power_display = result.power.copy()
     if show_coi:

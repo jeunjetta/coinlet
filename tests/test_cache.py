@@ -1,6 +1,6 @@
 """Tests for DuckDB cache layer."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pandas as pd
 
@@ -34,8 +34,12 @@ class TestPriceCache:
             end = sample_ohlcv_df.index.max().to_pydatetime()
 
             cache.store_ohlcv(
-                "test", "BTC-USD", Granularity.ONE_DAY, sample_ohlcv_df,
-                start=start, end=end,
+                "test",
+                "BTC-USD",
+                Granularity.ONE_DAY,
+                sample_ohlcv_df,
+                start=start,
+                end=end,
             )
 
             ranges = cache.get_cached_ranges("test", "BTC-USD", Granularity.ONE_DAY)
@@ -51,12 +55,10 @@ class TestPriceCache:
         cache = PriceCache(db_path=temp_cache_dir / "test.duckdb")
 
         try:
-            start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-            end = datetime(2024, 1, 10, tzinfo=timezone.utc)
+            start = datetime(2024, 1, 1, tzinfo=UTC)
+            end = datetime(2024, 1, 10, tzinfo=UTC)
 
-            missing = cache.get_missing_ranges(
-                "test", "BTC-USD", Granularity.ONE_DAY, start, end
-            )
+            missing = cache.get_missing_ranges("test", "BTC-USD", Granularity.ONE_DAY, start, end)
 
             assert len(missing) == 1
             assert missing[0] == (start, end)
@@ -68,24 +70,30 @@ class TestPriceCache:
         cache = PriceCache(db_path=temp_cache_dir / "test.duckdb")
 
         try:
-            cached_start = datetime(2024, 1, 3, tzinfo=timezone.utc)
-            cached_end = datetime(2024, 1, 7, tzinfo=timezone.utc)
+            cached_start = datetime(2024, 1, 3, tzinfo=UTC)
+            cached_end = datetime(2024, 1, 7, tzinfo=UTC)
 
             partial_df = sample_ohlcv_df[
-                (sample_ohlcv_df.index >= cached_start) &
-                (sample_ohlcv_df.index <= cached_end)
+                (sample_ohlcv_df.index >= cached_start) & (sample_ohlcv_df.index <= cached_end)
             ]
             cache.store_ohlcv(
-                "test", "BTC-USD", Granularity.ONE_DAY, partial_df,
-                start=cached_start, end=cached_end,
+                "test",
+                "BTC-USD",
+                Granularity.ONE_DAY,
+                partial_df,
+                start=cached_start,
+                end=cached_end,
             )
 
-            request_start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-            request_end = datetime(2024, 1, 10, tzinfo=timezone.utc)
+            request_start = datetime(2024, 1, 1, tzinfo=UTC)
+            request_end = datetime(2024, 1, 10, tzinfo=UTC)
 
             missing = cache.get_missing_ranges(
-                "test", "BTC-USD", Granularity.ONE_DAY,
-                request_start, request_end,
+                "test",
+                "BTC-USD",
+                Granularity.ONE_DAY,
+                request_start,
+                request_end,
             )
 
             assert len(missing) == 2
@@ -201,29 +209,27 @@ class TestFetchWithCache:
 
         mock_source = MagicMock()
         mock_source.source_name = "mock"
-        mock_source.fetch_historical.return_value = pd.DataFrame({
-            "timestamp": pd.date_range("2024-01-01", periods=3, freq="D", tz="UTC"),
-            "open": [100, 101, 102],
-            "high": [102, 103, 104],
-            "low": [99, 100, 101],
-            "close": [101, 102, 103],
-            "volume": [1000, 1100, 1200],
-        }).set_index("timestamp")
+        mock_source.fetch_historical.return_value = pd.DataFrame(
+            {
+                "timestamp": pd.date_range("2024-01-01", periods=3, freq="D", tz="UTC"),
+                "open": [100, 101, 102],
+                "high": [102, 103, 104],
+                "low": [99, 100, 101],
+                "close": [101, 102, 103],
+                "volume": [1000, 1100, 1200],
+            }
+        ).set_index("timestamp")
 
         try:
-            start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-            end = datetime(2024, 1, 4, tzinfo=timezone.utc)
+            start = datetime(2024, 1, 1, tzinfo=UTC)
+            end = datetime(2024, 1, 4, tzinfo=UTC)
 
-            df = fetch_with_cache(
-                cache, mock_source, "BTC-USD", Granularity.ONE_DAY, start, end
-            )
+            df = fetch_with_cache(cache, mock_source, "BTC-USD", Granularity.ONE_DAY, start, end)
 
             assert len(df) == 3
             mock_source.fetch_historical.assert_called_once()
 
-            df2 = fetch_with_cache(
-                cache, mock_source, "BTC-USD", Granularity.ONE_DAY, start, end
-            )
+            df2 = fetch_with_cache(cache, mock_source, "BTC-USD", Granularity.ONE_DAY, start, end)
 
             assert len(df2) == 3
             assert mock_source.fetch_historical.call_count == 1

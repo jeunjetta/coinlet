@@ -13,16 +13,16 @@ from coinlet.transform import CWTResult, cwt, log_periods
 
 __version__ = "0.1.0"
 __all__ = [
-    "load_csv",
+    "CWTResult",
     "Source",
     "StreamBuffer",
-    "cwt",
-    "CWTResult",
-    "log_periods",
-    "surface_3d",
-    "scalogram",
-    "create_surface_figure",
     "create_scalogram_figure",
-    "update_surface_data",
+    "create_surface_figure",
+    "cwt",
+    "load_csv",
+    "log_periods",
+    "scalogram",
+    "surface_3d",
     "update_scalogram_data",
+    "update_surface_data",
 ]

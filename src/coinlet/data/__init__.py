@@ -13,16 +13,16 @@ from coinlet.data.protocol import LiveSource, PriceSource
 from coinlet.data.types import GRANULARITY_SECONDS, OHLCV, Bar, Granularity, Tick
 
 __all__ = [
-    "Source",
-    "StreamBuffer",
-    "load_csv",
-    "PriceSource",
-    "LiveSource",
+    "GRANULARITY_SECONDS",
     "OHLCV",
-    "Tick",
     "Bar",
     "Granularity",
-    "GRANULARITY_SECONDS",
+    "LiveSource",
+    "PriceSource",
+    "Source",
+    "StreamBuffer",
+    "Tick",
+    "load_csv",
 ]
 
 
@@ -73,6 +73,5 @@ def __getattr__(name: str):
         return _lazy_import(name)
     except ImportError as e:
         raise ImportError(
-            f"Cannot import {name}: {e}. "
-            "This component requires optional dependencies."
+            f"Cannot import {name}: {e}. This component requires optional dependencies."
         ) from e
