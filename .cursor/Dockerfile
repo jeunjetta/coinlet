@@ -1,7 +1,7 @@
 FROM ubuntu:24.04
 
 ARG NODE_VERSION=22.23.4
-ARG PYTHON_VERSION=3.11
+ARG PYTHON_VERSION=3.11.5
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \

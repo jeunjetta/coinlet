@@ -22,7 +22,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
       - name: Set up Python
-        run: uv python install 3.11
+        run: uv python install 3.11.5
       - name: Install dependencies
         run: uv sync --dev
       - name: Lint with ruff (includes security rules)
@@ -38,7 +38,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
       - name: Set up Python
-        run: uv python install 3.11
+        run: uv python install 3.11.5
       - name: Install dependencies
         run: uv sync --dev
       - name: Run tests with coverage
@@ -52,7 +52,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
       - name: Set up Python
-        run: uv python install 3.11
+        run: uv python install 3.11.5
       - name: Install dependencies
         run: uv sync --dev
       - name: Audit dependencies with pip-audit

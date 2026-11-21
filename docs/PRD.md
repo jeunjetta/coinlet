@@ -54,7 +54,7 @@ src/coinlet/
 ```
 
 ### Dependencies
-- Python ≥3.11 (managed with uv)
+- Python ≥3.11.5 (managed with uv)
 - PyWavelets (`pywt`) – CWT implementation
 - pandas – Time series handling
 - numpy – Numerical operations
