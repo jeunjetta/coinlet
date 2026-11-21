@@ -1,6 +1,6 @@
 """Tests for Coinbase data source."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -28,8 +28,8 @@ class TestCoinbaseHistorical:
         mock_session.get.return_value = mock_response
         source._session = mock_session
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 4, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 4, tzinfo=UTC)
 
         df = source.fetch_historical("BTC-USD", Granularity.ONE_DAY, start, end)
 
@@ -52,8 +52,8 @@ class TestCoinbaseHistorical:
         ]
         source._session = mock_session
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2025, 2, 1, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2025, 2, 1, tzinfo=UTC)
 
         df = source.fetch_historical("BTC-USD", Granularity.ONE_DAY, start, end)
 
@@ -70,8 +70,8 @@ class TestCoinbaseHistorical:
         mock_session.get.return_value = mock_response
         source._session = mock_session
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 4, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 4, tzinfo=UTC)
 
         df = source.fetch_historical("INVALID-USD", Granularity.ONE_DAY, start, end)
 
@@ -92,8 +92,8 @@ class TestCoinbaseHistorical:
         mock_session.get.side_effect = [rate_limit_response, success_response]
         source._session = mock_session
 
-        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 2, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 1, tzinfo=UTC)
+        end = datetime(2024, 1, 2, tzinfo=UTC)
 
         with patch("coinlet.data.coinbase.time.sleep"):
             df = source.fetch_historical("BTC-USD", Granularity.ONE_DAY, start, end)
@@ -121,7 +121,8 @@ class TestCoinbaseIntegration:
         source = CoinbaseHistorical()
 
         from datetime import timedelta
-        end = datetime.now(timezone.utc)
+
+        end = datetime.now(UTC)
         start = end - timedelta(days=5)
 
         df = source.fetch_historical("BTC-USD", Granularity.ONE_DAY, start, end)

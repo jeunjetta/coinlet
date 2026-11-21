@@ -131,9 +131,7 @@ class SeriesReplay:
 
     def __iter__(self) -> Iterator[tuple[pd.Timestamp, float]]:
         series = self._load_replay_series()
-        self._replay_items = [
-            (pd.Timestamp(idx), float(val)) for idx, val in series.items()
-        ]
+        self._replay_items = [(pd.Timestamp(idx), float(val)) for idx, val in series.items()]
         self._replay_pos = 0
         return self
 

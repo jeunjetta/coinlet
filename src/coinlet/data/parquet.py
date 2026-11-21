@@ -112,9 +112,7 @@ class ParquetLoader:
             if candidate.startswith(("http://", "https://")):
                 return candidate if candidate.endswith("/") else candidate + "/"
             path = Path(candidate)
-            if path.exists() and (
-                list(path.glob("*.parquet")) or list(path.glob("*.csv"))
-            ):
+            if path.exists() and (list(path.glob("*.parquet")) or list(path.glob("*.csv"))):
                 return str(path)
 
         return "data"
@@ -198,7 +196,9 @@ class ParquetLoader:
 
         except ImportError:
             from urllib.request import urlopen
-            with urlopen(url, timeout=60) as response:
+
+            # url is from BUNDLED_ASSETS (known safe URLs), not user input
+            with urlopen(url, timeout=60) as response:  # noqa: S310
                 return response.read()
 
     def _normalize_df(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -284,12 +284,14 @@ class ParquetLoader:
 
         datasets = []
         for f in data_path.glob("*.parquet"):
-            datasets.append({
-                "name": f.stem,
-                "path": str(f),
-                "size_bytes": f.stat().st_size,
-                "size_mb": round(f.stat().st_size / (1024 * 1024), 2),
-            })
+            datasets.append(
+                {
+                    "name": f.stem,
+                    "path": str(f),
+                    "size_bytes": f.stat().st_size,
+                    "size_mb": round(f.stat().st_size / (1024 * 1024), 2),
+                }
+            )
 
         return sorted(datasets, key=lambda x: x["name"])
 

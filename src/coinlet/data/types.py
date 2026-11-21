@@ -2,13 +2,13 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 import pandas as pd
 
 
-class Granularity(str, Enum):
+class Granularity(StrEnum):
     """Supported candle granularities."""
 
     ONE_MINUTE = "1m"

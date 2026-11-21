@@ -1,8 +1,8 @@
 """Tests for coinlet.data module."""
 
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
 import pandas as pd
 import pytest

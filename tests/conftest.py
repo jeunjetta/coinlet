@@ -1,6 +1,5 @@
 """Pytest configuration and fixtures."""
 
-
 import pandas as pd
 import pytest
 

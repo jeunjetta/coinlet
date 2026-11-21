@@ -1,0 +1,34 @@
+# Pre-commit hooks for coinlet
+# Install: uv run pre-commit install
+# Run all: uv run pre-commit run --all-files
+
+repos:
+  # Ruff linting and formatting (fast, runs locally)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.6
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Secret detection (fast scan of staged files)
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+
+  # Basic file hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: detect-private-key
+      - id: check-merge-conflict
+
+# Note: Tests and pip-audit are NOT in pre-commit because they're slow.
+# Run `make check` for the full suite before pushing.

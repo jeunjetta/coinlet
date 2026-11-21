@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -60,12 +60,13 @@ class PriceCache:
             db_path = self._cache_dir / "coinlet.duckdb"
 
         self._db_path = Path(db_path) if db_path else None
-        self._conn: "duckdb.DuckDBPyConnection" | None = None
+        self._conn: duckdb.DuckDBPyConnection | None = None
 
-    def _get_conn(self) -> "duckdb.DuckDBPyConnection":
+    def _get_conn(self) -> duckdb.DuckDBPyConnection:
         """Get or create DuckDB connection."""
         if self._conn is None:
             import duckdb
+
             self._conn = duckdb.connect(str(self._db_path) if self._db_path else ":memory:")
             self._init_schema()
         return self._conn
@@ -129,11 +130,14 @@ class PriceCache:
             List of (start, end) tuples for cached ranges
         """
         conn = self._get_conn()
-        result = conn.execute("""
+        result = conn.execute(
+            """
             SELECT start_time, end_time FROM ohlcv_ranges
             WHERE source = ? AND symbol = ? AND granularity = ?
             ORDER BY start_time
-        """, [source, symbol, granularity.value]).fetchall()
+        """,
+            [source, symbol, granularity.value],
+        ).fetchall()
 
         return [(row[0], row[1]) for row in result]
 
@@ -212,26 +216,40 @@ class PriceCache:
             end = df.index.max().to_pydatetime()
 
         for ts, row in df.iterrows():
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO ohlcv
                 (source, symbol, granularity, timestamp, open, high, low, close, volume)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, [
-                source, symbol, granularity.value,
-                ts.to_pydatetime(),
-                float(row["open"]), float(row["high"]),
-                float(row["low"]), float(row["close"]),
-                float(row["volume"]),
-            ])
+            """,
+                [
+                    source,
+                    symbol,
+                    granularity.value,
+                    ts.to_pydatetime(),
+                    float(row["open"]),
+                    float(row["high"]),
+                    float(row["low"]),
+                    float(row["close"]),
+                    float(row["volume"]),
+                ],
+            )
 
-        conn.execute("""
+        conn.execute(
+            """
             INSERT OR REPLACE INTO ohlcv_ranges
             (source, symbol, granularity, start_time, end_time, fetched_at)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, [
-            source, symbol, granularity.value,
-            start, end, datetime.now(timezone.utc),
-        ])
+        """,
+            [
+                source,
+                symbol,
+                granularity.value,
+                start,
+                end,
+                datetime.now(UTC),
+            ],
+        )
 
     def get_ohlcv(
         self,
@@ -298,15 +316,21 @@ class PriceCache:
             result: Serialized result (e.g., pickled numpy array)
         """
         conn = self._get_conn()
-        conn.execute("""
+        conn.execute(
+            """
             INSERT OR REPLACE INTO wavelet_results
             (cache_key, data_hash, wavelet_type, params, result, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, [
-            cache_key, data_hash, wavelet_type,
-            json.dumps(params), result,
-            datetime.now(timezone.utc),
-        ])
+        """,
+            [
+                cache_key,
+                data_hash,
+                wavelet_type,
+                json.dumps(params),
+                result,
+                datetime.now(UTC),
+            ],
+        )
 
     def load_wavelet_result(self, cache_key: str) -> bytes | None:
         """Load wavelet computation result from cache.
@@ -318,9 +342,12 @@ class PriceCache:
             Serialized result bytes, or None if not cached
         """
         conn = self._get_conn()
-        result = conn.execute("""
+        result = conn.execute(
+            """
             SELECT result FROM wavelet_results WHERE cache_key = ?
-        """, [cache_key]).fetchone()
+        """,
+            [cache_key],
+        ).fetchone()
 
         return result[0] if result else None
 
@@ -334,9 +361,12 @@ class PriceCache:
             True if result exists in cache
         """
         conn = self._get_conn()
-        result = conn.execute("""
+        result = conn.execute(
+            """
             SELECT 1 FROM wavelet_results WHERE cache_key = ? LIMIT 1
-        """, [cache_key]).fetchone()
+        """,
+            [cache_key],
+        ).fetchone()
         return result is not None
 
     def export_to_parquet(
@@ -392,9 +422,10 @@ class PriceCache:
         """
         conn = self._get_conn()
 
+        # parquet_path is from the caller (internal), not user input
         df = conn.execute(f"""
             SELECT * FROM read_parquet('{parquet_path}')
-        """).fetchdf()
+        """).fetchdf()  # noqa: S608
 
         df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
         df = df.set_index("timestamp").sort_index()
@@ -487,24 +518,26 @@ def fetch_with_cache(
         Complete DataFrame for requested range
     """
     if end is None:
-        end = datetime.now(timezone.utc)
+        end = datetime.now(UTC)
 
     if start.tzinfo is None:
-        start = start.replace(tzinfo=timezone.utc)
+        start = start.replace(tzinfo=UTC)
     if end.tzinfo is None:
-        end = end.replace(tzinfo=timezone.utc)
+        end = end.replace(tzinfo=UTC)
 
-    missing = cache.get_missing_ranges(
-        source.source_name, symbol, granularity, start, end
-    )
+    missing = cache.get_missing_ranges(source.source_name, symbol, granularity, start, end)
 
     for range_start, range_end in missing:
         logger.info(f"Fetching {symbol} {granularity.value} from {range_start} to {range_end}")
         df = source.fetch_historical(symbol, granularity, range_start, range_end)
         if not df.empty:
             cache.store_ohlcv(
-                source.source_name, symbol, granularity, df,
-                start=range_start, end=range_end,
+                source.source_name,
+                symbol,
+                granularity,
+                df,
+                start=range_start,
+                end=range_end,
             )
 
     return cache.get_ohlcv(source.source_name, symbol, granularity, start, end)

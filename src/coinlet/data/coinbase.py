@@ -15,7 +15,7 @@ import json
 import logging
 import time
 from collections.abc import AsyncIterator, Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -69,14 +69,17 @@ class CoinbaseHistorical(SeriesReplay):
         self._session: requests.Session | None = None
         self._replay_series = None
 
-    def _get_session(self) -> "requests.Session":
+    def _get_session(self) -> requests.Session:
         if self._session is None:
             import requests
+
             self._session = requests.Session()
-            self._session.headers.update({
-                "User-Agent": "coinlet/0.1.0",
-                "Accept": "application/json",
-            })
+            self._session.headers.update(
+                {
+                    "User-Agent": "coinlet/0.1.0",
+                    "Accept": "application/json",
+                }
+            )
         return self._session
 
     def _fetch_page(
@@ -103,7 +106,7 @@ class CoinbaseHistorical(SeriesReplay):
                 if resp.status_code == 200:
                     return resp.json()
                 elif resp.status_code == 429:
-                    wait = 2 ** attempt
+                    wait = 2**attempt
                     logger.warning(f"Rate limited, waiting {wait}s")
                     time.sleep(wait)
                 elif resp.status_code == 404:
@@ -137,12 +140,12 @@ class CoinbaseHistorical(SeriesReplay):
             DataFrame with UTC timestamp index and OHLCV columns
         """
         if end is None:
-            end = datetime.now(timezone.utc)
+            end = datetime.now(UTC)
 
         if start.tzinfo is None:
-            start = start.replace(tzinfo=timezone.utc)
+            start = start.replace(tzinfo=UTC)
         if end.tzinfo is None:
-            end = end.replace(tzinfo=timezone.utc)
+            end = end.replace(tzinfo=UTC)
 
         granularity_secs = COINBASE_GRANULARITY_MAP[granularity]
         interval_secs = GRANULARITY_SECONDS[granularity]
@@ -153,15 +156,13 @@ class CoinbaseHistorical(SeriesReplay):
 
         while current_start < end:
             from datetime import timedelta
-            page_end = min(
-                current_start + timedelta(seconds=max_span_secs),
-                end
-            )
+
+            page_end = min(current_start + timedelta(seconds=max_span_secs), end)
 
             raw = self._fetch_page(symbol, granularity_secs, current_start, page_end)
 
             for row in raw:
-                ts = datetime.fromtimestamp(row[0], tz=timezone.utc)
+                ts = datetime.fromtimestamp(row[0], tz=UTC)
                 candle = OHLCV(
                     timestamp=ts,
                     open=float(row[3]),
@@ -187,7 +188,7 @@ class CoinbaseHistorical(SeriesReplay):
             return series
         if self._symbol is None:
             return super()._load_replay_series()
-        start = self._start or datetime(2015, 1, 1, tzinfo=timezone.utc)
+        start = self._start or datetime(2015, 1, 1, tzinfo=UTC)
         df = self.fetch_historical(self._symbol, self._granularity, start, self._end)
         return df["close"]
 
@@ -238,11 +239,13 @@ class CoinbaseLive:
                     ping_interval=20,
                     ping_timeout=10,
                 ) as ws:
-                    subscribe_msg = json.dumps({
-                        "type": "subscribe",
-                        "product_ids": symbols,
-                        "channels": ["ticker"],
-                    })
+                    subscribe_msg = json.dumps(
+                        {
+                            "type": "subscribe",
+                            "product_ids": symbols,
+                            "channels": ["ticker"],
+                        }
+                    )
                     await ws.send(subscribe_msg)
                     delay = self._reconnect_delay
 

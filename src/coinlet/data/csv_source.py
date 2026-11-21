@@ -7,7 +7,7 @@ represented as timestamp + OHLCV columns.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -138,11 +138,11 @@ class CSVSource(SeriesReplay):
 
         if start:
             if start.tzinfo is None:
-                start = start.replace(tzinfo=timezone.utc)
+                start = start.replace(tzinfo=UTC)
             df = df[df.index >= start]
         if end:
             if end.tzinfo is None:
-                end = end.replace(tzinfo=timezone.utc)
+                end = end.replace(tzinfo=UTC)
             df = df[df.index <= end]
 
         if not df.empty:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import click
 
@@ -29,7 +29,8 @@ def main(verbose: bool):
 @main.command()
 @click.argument("symbol")
 @click.option(
-    "--granularity", "-g",
+    "--granularity",
+    "-g",
     type=click.Choice(["1m", "5m", "15m", "1h", "6h", "1d"]),
     default="1d",
     help="Candle granularity",
@@ -47,7 +48,8 @@ def main(verbose: bool):
     help="End date (YYYY-MM-DD), defaults to now",
 )
 @click.option(
-    "--source", "-s",
+    "--source",
+    "-s",
     type=click.Choice(["coinbase", "yahoo"]),
     default="coinbase",
     help="Data source",
@@ -58,7 +60,8 @@ def main(verbose: bool):
     help="Export to Parquet file in data/ directory",
 )
 @click.option(
-    "--output", "-o",
+    "--output",
+    "-o",
     type=click.Path(),
     default=None,
     help="Output file path (CSV or Parquet based on extension)",
@@ -85,11 +88,11 @@ def fetch(
     gran = Granularity(granularity)
 
     if since.tzinfo is None:
-        since = since.replace(tzinfo=timezone.utc)
+        since = since.replace(tzinfo=UTC)
     if until is None:
-        until = datetime.now(timezone.utc)
+        until = datetime.now(UTC)
     elif until.tzinfo is None:
-        until = until.replace(tzinfo=timezone.utc)
+        until = until.replace(tzinfo=UTC)
 
     if source == "coinbase":
         data_source = CoinbaseHistorical()
@@ -119,6 +122,7 @@ def fetch(
 
         if output:
             from pathlib import Path
+
             out_path = Path(output)
             if out_path.suffix == ".parquet":
                 df.reset_index().to_parquet(out_path, index=False)
@@ -135,13 +139,15 @@ def fetch(
 @main.command()
 @click.argument("symbols", nargs=-1, required=True)
 @click.option(
-    "--granularity", "-g",
+    "--granularity",
+    "-g",
     type=click.Choice(["1m", "5m", "15m", "1h"]),
     default="1m",
     help="Bar aggregation granularity",
 )
 @click.option(
-    "--duration", "-d",
+    "--duration",
+    "-d",
     type=int,
     default=60,
     help="Duration in seconds (default: 60)",
@@ -204,7 +210,8 @@ def stream(symbols: tuple[str, ...], granularity: str, duration: int):
 
 @main.command()
 @click.option(
-    "--source", "-s",
+    "--source",
+    "-s",
     type=click.Choice(["coinbase", "yahoo"]),
     default="coinbase",
 )
@@ -215,7 +222,8 @@ def list_cached(source: str):
     cache = PriceCache()
     conn = cache._get_conn()
 
-    result = conn.execute("""
+    result = conn.execute(
+        """
         SELECT source, symbol, granularity,
                MIN(timestamp) as first,
                MAX(timestamp) as last,
@@ -224,7 +232,9 @@ def list_cached(source: str):
         WHERE source = ?
         GROUP BY source, symbol, granularity
         ORDER BY symbol, granularity
-    """, [source]).fetchall()
+    """,
+        [source],
+    ).fetchall()
 
     if not result:
         click.echo(f"No cached data for source: {source}")
@@ -233,9 +243,7 @@ def list_cached(source: str):
     click.echo(f"Cached data for {source}:")
     click.echo("-" * 80)
     for row in result:
-        click.echo(
-            f"{row[1]:12} {row[2]:4} | {row[3]} to {row[4]} | {row[5]:,} rows"
-        )
+        click.echo(f"{row[1]:12} {row[2]:4} | {row[3]} to {row[4]} | {row[5]:,} rows")
 
     cache.close()
 
@@ -244,12 +252,14 @@ def list_cached(source: str):
 @click.argument("parquet_file", type=click.Path(exists=True))
 @click.argument("symbol")
 @click.option(
-    "--granularity", "-g",
+    "--granularity",
+    "-g",
     type=click.Choice(["1m", "5m", "15m", "1h", "6h", "1d"]),
     required=True,
 )
 @click.option(
-    "--source", "-s",
+    "--source",
+    "-s",
     default="imported",
     help="Source name for caching",
 )

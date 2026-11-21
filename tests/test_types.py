@@ -1,6 +1,6 @@
 """Tests for data types."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from coinlet.data.types import (
     OHLCV,
@@ -14,7 +14,7 @@ from coinlet.data.types import (
 
 def test_ohlcv_creation():
     """Test OHLCV dataclass creation."""
-    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    ts = datetime(2024, 1, 1, tzinfo=UTC)
     candle = OHLCV(
         timestamp=ts,
         open=100.0,
@@ -34,7 +34,7 @@ def test_ohlcv_creation():
 
 def test_ohlcv_to_dict():
     """Test OHLCV to_dict method."""
-    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    ts = datetime(2024, 1, 1, tzinfo=UTC)
     candle = OHLCV(ts, 100.0, 105.0, 99.0, 103.0, 1000.0)
 
     d = candle.to_dict()
@@ -44,7 +44,7 @@ def test_ohlcv_to_dict():
 
 def test_tick_creation():
     """Test Tick dataclass creation."""
-    ts = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    ts = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     tick = Tick(
         timestamp=ts,
         price=50000.0,
@@ -60,7 +60,7 @@ def test_tick_creation():
 
 def test_bar_creation():
     """Test Bar dataclass creation."""
-    ts = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    ts = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     bar = Bar(
         timestamp=ts,
         open=50000.0,
@@ -85,8 +85,8 @@ def test_granularity_enum():
 def test_ohlcv_list_to_dataframe():
     """Test conversion from OHLCV list to DataFrame."""
     candles = [
-        OHLCV(datetime(2024, 1, 1, tzinfo=timezone.utc), 100, 105, 99, 103, 1000),
-        OHLCV(datetime(2024, 1, 2, tzinfo=timezone.utc), 103, 108, 102, 106, 1100),
+        OHLCV(datetime(2024, 1, 1, tzinfo=UTC), 100, 105, 99, 103, 1000),
+        OHLCV(datetime(2024, 1, 2, tzinfo=UTC), 103, 108, 102, 106, 1100),
     ]
 
     df = ohlcv_list_to_dataframe(candles)

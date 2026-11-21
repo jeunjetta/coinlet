@@ -90,7 +90,9 @@ class TestCWT:
         power_at_center = result.power[:, time_center]
 
         for true_period in true_periods:
-            period_mask = (result.periods > true_period * 0.7) & (result.periods < true_period * 1.3)
+            period_mask = (result.periods > true_period * 0.7) & (
+                result.periods < true_period * 1.3
+            )
             local_power = power_at_center[period_mask]
             local_periods = result.periods[period_mask]
             local_peak_idx = np.argmax(local_power)
@@ -100,7 +102,7 @@ class TestCWT:
             )
 
     def test_cwt_with_different_wavelets(self, synthetic_sine):
-        series, true_period = synthetic_sine
+        series, _true_period = synthetic_sine
         periods = log_periods(10.0, 100.0, 30)
 
         for wavelet in ["cmor1.5-1.0", "mexh", "gaus1"]:
