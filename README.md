@@ -64,13 +64,9 @@ uv run marimo run notebooks/explorer.py
 
 ### Run in molab (Cloud)
 
-> **Note for private repos**: molab's direct GitHub link requires the repo to be public.
-> For private repos, download `notebooks/explorer.py` and upload it to
-> [molab.io](https://molab.marimo.app) manually.
+[![Open in molab](https://marimo.io/molab-shield.svg)](https://molab.marimo.io/github/jeunjetta/coinlet/blob/main/notebooks/explorer.py)
 
-For public repos:
-
-[![Open in molab](https://marimo.io/shield.svg)](https://molab.marimo.app/#github.com/jeunjetta/coinlet/blob/main/notebooks/explorer.py)
+Or open directly: https://molab.marimo.io/github/jeunjetta/coinlet/blob/main/notebooks/explorer.py
 
 ### Static Export (GitHub Pages)
 

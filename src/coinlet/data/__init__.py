@@ -8,6 +8,7 @@ are still imported from `coinlet.data`. Heavy deps (duckdb, websockets,
 yfinance) stay lazy so WASM/Pyodide can import Parquet helpers.
 """
 
+from coinlet.data.ensure import ensure_cached_data, find_local_data_dir
 from coinlet.data.interfaces import Source, StreamBuffer, load_csv
 from coinlet.data.protocol import LiveSource, PriceSource
 from coinlet.data.types import GRANULARITY_SECONDS, OHLCV, Bar, Granularity, Tick
@@ -22,6 +23,8 @@ __all__ = [
     "Source",
     "StreamBuffer",
     "Tick",
+    "ensure_cached_data",
+    "find_local_data_dir",
     "load_csv",
 ]
 

@@ -222,6 +222,7 @@ __marimo__/
 # coinlet local cache (DuckDB, minute/hourly data)
 .cache/coinlet/
 cache/
+coinlet_data/
 *.duckdb
 *.duckdb.wal
 
