@@ -72,6 +72,8 @@ This project uses multiple layers of automated security checks. Here's what each
 - License issues (blocks GPL-3.0, AGPL-3.0 — copyleft licenses incompatible with MIT)
 - Malicious packages (checks against GitHub's advisory database)
 
+**Note**: Only copyleft licenses are blocked. Permissive licenses (MIT, Apache-2.0, BSD, etc.) are allowed.
+
 ### CodeQL
 
 **What**: GitHub's semantic code analysis that understands data flow through your program.

@@ -71,6 +71,9 @@ jobs:
   gitleaks:
     name: Secret Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read  # Required to read PR commits
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -84,6 +87,9 @@ jobs:
     name: Dependency Review
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Dependency Review
@@ -91,12 +97,12 @@ jobs:
         with:
           fail-on-severity: moderate
           deny-licenses: GPL-3.0, AGPL-3.0
-          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, Python-2.0, PSF-2.0, 0BSD, Unlicense
 
   codeql:
     name: CodeQL
     runs-on: ubuntu-latest
     permissions:
+      contents: read          # Required for checkout
       security-events: write  # Required for CodeQL
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
