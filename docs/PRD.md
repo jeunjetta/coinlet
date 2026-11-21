@@ -118,7 +118,7 @@ Marimo notebook with interactive controls:
 
 **Run modes**:
 1. **Local**: `uv run marimo edit/run notebooks/explorer.py`
-2. **molab**: Cloud notebooks at molab.marimo.app (upload for private repos)
+2. **molab**: Cloud notebooks at https://molab.marimo.io/github/jeunjetta/coinlet/blob/main/notebooks/explorer.py
 3. **GitHub Pages**: Static WASM export (manual workflow, cached data only)
 
 > **Note**: GitHub Pages on private repos requires a paid plan and publishes publicly.

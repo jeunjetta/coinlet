@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "coinlet",
+#     "coinlet @ git+https://github.com/jeunjetta/coinlet",
 #     "marimo",
 #     "numpy",
 #     "pandas",
@@ -55,46 +55,32 @@ def __():
     import pandas as pd
     from pathlib import Path
 
-    return np, pd, Path
+    from coinlet.data import ensure_cached_data
+
+    return Path, ensure_cached_data, np, pd
 
 
 @app.cell
-def __(mo, Path):
-    def find_data_dir() -> Path:
-        """Find data directory, checking multiple locations for compatibility.
+def __(mo):
+    refresh_data = mo.ui.run_button(label="Refresh cached data")
+    return (refresh_data,)
 
-        Search order:
-        1. public/ next to notebook (WASM export bundles data here)
-        2. data/ in current dir (running from repo root)
-        3. ../data/ (running from notebooks/)
 
-        The teammate's PR #5 loader will also look for Parquet files next to
-        the notebook by default, so public/ is the canonical location for bundled data.
-        """
-        notebook_dir = Path(mo.notebook_location()).parent if mo.notebook_location() else Path(".")
+@app.cell
+def __(Path, ensure_cached_data, mo, refresh_data):
+    notebook_loc = mo.notebook_location()
+    notebook_dir = Path(notebook_loc).parent if notebook_loc else Path(".")
 
-        candidates = [
-            notebook_dir / "public",
-            Path("data"),
-            Path("../data"),
-            notebook_dir.parent / "data",
-        ]
-
-        for candidate in candidates:
-            if candidate.exists() and (
-                list(candidate.glob("*.csv")) or list(candidate.glob("*.parquet"))
-            ):
-                return candidate
-
-        return Path("data")
-
-    data_dir = find_data_dir()
-    csv_files = list(data_dir.glob("*.csv")) + list(data_dir.glob("*.parquet"))
-    file_options = {f.name: str(f) for f in csv_files} if csv_files else {"demo (synthetic)": "demo"}
+    data_dir = ensure_cached_data(
+        notebook_dir=notebook_dir,
+        force_refresh=bool(refresh_data.value),
+    )
+    data_files = sorted(data_dir.glob("*.csv")) + sorted(data_dir.glob("*.parquet"))
+    file_options = {f.name: str(f) for f in data_files} or {"demo (synthetic)": "demo"}
 
     data_source = mo.ui.dropdown(
         options=file_options,
-        value=list(file_options.keys())[0] if file_options else "demo (synthetic)",
+        value=next(iter(file_options)),
         label="Data source",
     )
 
@@ -119,8 +105,8 @@ def __(mo, Path):
         label="Preprocessing",
     )
 
-    mo.md("### Controls")
-    return data_source, wavelet_type, preprocess_type, data_dir, csv_files, file_options, find_data_dir
+    mo.md(f"### Controls\n\nData directory: `{data_dir}`")
+    return data_dir, data_files, data_source, file_options, preprocess_type, wavelet_type
 
 
 @app.cell
@@ -137,13 +123,13 @@ def __(mo):
 
     show_coi = mo.ui.checkbox(value=True, label="Show cone of influence")
 
-    return min_period, max_period, n_periods, show_coi
+    return max_period, min_period, n_periods, show_coi
 
 
 @app.cell
-def __(mo, data_source, wavelet_type, preprocess_type):
+def __(data_source, mo, preprocess_type, refresh_data, wavelet_type):
     mo.hstack(
-        [data_source, wavelet_type, preprocess_type],
+        [data_source, wavelet_type, preprocess_type, refresh_data],
         justify="start",
         gap=1,
     )
@@ -151,7 +137,7 @@ def __(mo, data_source, wavelet_type, preprocess_type):
 
 
 @app.cell
-def __(mo, min_period, max_period, n_periods, show_coi):
+def __(max_period, min_period, mo, n_periods, show_coi):
     mo.hstack(
         [min_period, max_period, n_periods, show_coi],
         justify="start",
