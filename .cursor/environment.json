@@ -1,0 +1,16 @@
+{
+  "name": "coinlet-dev",
+  "user": "ubuntu",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "mcpServers": {
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest", "--headless"]
+    }
+  },
+  "ports": [3000, 8000, 9222]
+}
