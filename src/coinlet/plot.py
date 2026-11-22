@@ -297,16 +297,96 @@ def create_scalogram_figure(
     return fig
 
 
-def update_surface_data(fig: go.Figure, result: CWTResult) -> go.Figure:
-    """Update an existing surface figure with new data (for live mode)."""
+def _time_axis_labels(result: CWTResult) -> tuple[np.ndarray, list[str], np.ndarray]:
+    """Build numeric time axis, label strings, and tick indices for live updates."""
+    times_numeric = np.arange(len(result.times))
+    time_labels = [str(t)[:19] for t in result.times]
+    tick_indices = np.linspace(0, len(time_labels) - 1, min(10, len(time_labels)), dtype=int)
+    return times_numeric, time_labels, tick_indices
+
+
+def update_surface_data(
+    fig: go.Figure,
+    result: CWTResult,
+    log_period: bool = True,
+) -> go.Figure:
+    """Update an existing surface figure with new CWT data (for live mode).
+
+    Refreshes x/y/z so growing time axes (cached → live append) stay consistent.
+    """
+    times_numeric, time_labels, tick_indices = _time_axis_labels(result)
+    periods_plot = np.log10(result.periods) if log_period else result.periods
+
+    fig.data[0].x = times_numeric
+    fig.data[0].y = periods_plot
     fig.data[0].z = result.power
+
+    period_ticks = result.periods[:: max(1, len(result.periods) // 6)]
+    period_tick_vals = np.log10(period_ticks) if log_period else period_ticks
+
+    fig.update_layout(
+        scene={
+            "xaxis": {
+                "title": "Time",
+                "tickmode": "array",
+                "tickvals": times_numeric[tick_indices].tolist(),
+                "ticktext": [time_labels[i] for i in tick_indices],
+            },
+            "yaxis": {
+                "title": "Period (log)" if log_period else "Period",
+                "tickmode": "array",
+                "tickvals": period_tick_vals.tolist(),
+                "ticktext": [f"{p:.1f}" for p in period_ticks],
+            },
+            "zaxis": {"title": "Power"},
+        }
+    )
     return fig
 
 
-def update_scalogram_data(fig: go.Figure, result: CWTResult, show_coi: bool = True) -> go.Figure:
-    """Update an existing scalogram figure with new data (for live mode)."""
+def update_scalogram_data(
+    fig: go.Figure,
+    result: CWTResult,
+    show_coi: bool = True,
+    log_period: bool = True,
+) -> go.Figure:
+    """Update an existing scalogram figure with new CWT data (for live mode).
+
+    Updates heatmap coordinates and the cone-of-influence curve when present.
+    """
+    times_numeric, time_labels, tick_indices = _time_axis_labels(result)
+    periods_plot = np.log10(result.periods) if log_period else result.periods
+
     power_display = result.power.copy()
     if show_coi:
         power_display = np.where(result.coi_mask, power_display * 0.3, power_display)
+
+    fig.data[0].x = times_numeric
+    fig.data[0].y = periods_plot
     fig.data[0].z = power_display
+
+    if show_coi and len(fig.data) > 1:
+        coi_boundary = _compute_coi_boundary(result.periods, len(result.times))
+        coi_y = np.log10(coi_boundary) if log_period else coi_boundary
+        coi_y = np.clip(coi_y, periods_plot.min(), periods_plot.max())
+        fig.data[1].x = times_numeric
+        fig.data[1].y = coi_y
+
+    period_ticks = result.periods[:: max(1, len(result.periods) // 6)]
+    period_tick_vals = np.log10(period_ticks) if log_period else period_ticks
+
+    fig.update_layout(
+        xaxis={
+            "title": "Time",
+            "tickmode": "array",
+            "tickvals": times_numeric[tick_indices].tolist(),
+            "ticktext": [time_labels[i] for i in tick_indices],
+        },
+        yaxis={
+            "title": "Period (log)" if log_period else "Period",
+            "tickmode": "array",
+            "tickvals": period_tick_vals.tolist(),
+            "ticktext": [f"{p:.1f}" for p in period_ticks],
+        },
+    )
     return fig

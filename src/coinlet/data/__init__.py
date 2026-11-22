@@ -63,6 +63,26 @@ def _lazy_import(name: str):
         from coinlet.data.live import LiveDataManager
 
         return LiveDataManager
+    elif name == "LiveExplorerSession":
+        from coinlet.data.live_session import LiveExplorerSession
+
+        return LiveExplorerSession
+    elif name == "LiveStatus":
+        from coinlet.data.live_session import LiveStatus
+
+        return LiveStatus
+    elif name == "live_runtime_supported":
+        from coinlet.data.live_session import live_runtime_supported
+
+        return live_runtime_supported
+    elif name == "merge_cached_and_live":
+        from coinlet.data.live_session import merge_cached_and_live
+
+        return merge_cached_and_live
+    elif name == "infer_product_id":
+        from coinlet.data.live_session import infer_product_id
+
+        return infer_product_id
     elif name == "ParquetLoader":
         from coinlet.data.parquet import ParquetLoader
 

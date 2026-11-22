@@ -17,7 +17,16 @@ Run locally:
     uv run marimo edit notebooks/explorer.py
     uv run marimo run notebooks/explorer.py
 
-For static WASM export (cached data only):
+Live mode (local or molab — public Coinbase data, no API keys):
+    1. Select a Coinbase Parquet source (e.g. coinbase_BTC_USD_1d.parquet).
+    2. Set Live mode to "Per-tick" to append Exchange WebSocket ticker prices
+       and refresh the scalogram/surface via update_*_data().
+    3. Set Live mode to "Rolling window" to periodically fetch public REST
+       candles, keep a trailing window, and re-run the wavelet transform.
+    4. Use the refresh control to choose the poll interval (1–10s).
+    Status callouts show connecting / live / fallback; failures keep cached data.
+
+For static WASM export (cached Parquet only — live mode is disabled):
     uv run marimo export html-wasm --mode run notebooks/explorer.py -o dist/explorer.html
 """
 
@@ -148,28 +157,53 @@ def __(max_period, min_period, mo, n_periods, show_coi):
 
 @app.cell
 def __(mo):
+    from coinlet.data.live_session import live_runtime_supported
+
+    live_ok, live_capability_reason = live_runtime_supported()
+
     live_mode = mo.ui.dropdown(
         options={
             "Off (static analysis)": "off",
-            "Per-tick (placeholder)": "per_tick",
-            "Rolling window (placeholder)": "rolling",
+            "Per-tick (Coinbase ticker)": "per_tick",
+            "Rolling window (Coinbase candles)": "rolling",
         },
         value="Off (static analysis)",
         label="Live mode",
     )
 
-    mo.callout(
-        mo.md(
-            f"""
-            **Live mode**: {live_mode}
-
-            *Per-tick and rolling window modes require a live data source
-            (Coinbase WebSocket). These will be wired by a teammate's Source implementation.*
-            """
-        ),
-        kind="info",
+    live_refresh = mo.ui.refresh(
+        options=[1, 2, 5, 10],
+        default_interval=2,
+        label="Live refresh (seconds)",
     )
-    return (live_mode,)
+
+    capability_note = (
+        live_capability_reason
+        if not live_ok
+        else (
+            "Per-tick uses the public Coinbase Exchange WebSocket ticker. "
+            "Rolling window periodically refreshes public REST candles and "
+            "re-runs the wavelet transform on a trailing window. "
+            "Live points append to cached Parquet history (no plot reset)."
+        )
+    )
+
+    mo.vstack(
+        [
+            mo.hstack([live_mode, live_refresh], justify="start", gap=1),
+            mo.callout(
+                mo.md(
+                    f"""
+                    **Live mode** (public Coinbase market data only — no API keys)
+
+                    {capability_note}
+                    """
+                ),
+                kind="warn" if not live_ok else "info",
+            ),
+        ]
+    )
+    return live_mode, live_refresh, live_ok, live_capability_reason
 
 
 @app.cell
@@ -208,26 +242,82 @@ def __(data_source, np, pd, Path):
         noise = np.random.randn(n_days) * 2
         return pd.Series(trend + cycles + noise, index=dates)
 
-    series = load_data(data_source.value)
-    return load_data, series
+    cached_series = load_data(data_source.value)
+    return load_data, cached_series
 
 
 @app.cell
-def __(mo, series):
-    mo.md(
-        f"""
-        ### Data Summary
+def __(cached_series, data_source):
+    from coinlet.data.live_session import LiveExplorerSession, infer_product_id
+    from coinlet.data.types import Granularity
 
-        - **Points**: {len(series):,}
-        - **Date range**: {series.index[0].date()} to {series.index[-1].date()}
-        - **Value range**: {series.min():.2f} to {series.max():.2f}
-        """
+    product_id = infer_product_id(data_source.value)
+    live_session = LiveExplorerSession(
+        cached_series=cached_series,
+        product_id=product_id,
+        granularity=Granularity.ONE_DAY,
+        window_size=min(512, max(64, len(cached_series))),
+    )
+    return live_session, product_id
+
+
+@app.cell
+def __(live_session, live_mode, live_refresh, live_ok):
+    # Depend on refresh so per-tick / rolling modes re-poll on an interval.
+    _ = live_refresh.value
+
+    desired = live_mode.value if live_ok else "off"
+    if live_session.mode != desired:
+        live_session.set_mode(desired)
+
+    analysis_series, live_status = live_session.poll()
+    return analysis_series, live_status
+
+
+@app.cell
+def __(mo, analysis_series, live_status, product_id):
+    status_kind = {
+        "idle": "neutral",
+        "connecting": "info",
+        "live": "success",
+        "reconnecting": "warn",
+        "fallback": "warn",
+        "unsupported": "danger",
+    }.get(live_status.state, "neutral")
+
+    mo.vstack(
+        [
+            mo.md(
+                f"""
+                ### Data Summary
+
+                - **Product**: `{product_id}`
+                - **Points (analysis)**: {len(analysis_series):,}
+                - **Date range**: {analysis_series.index[0]} → {analysis_series.index[-1]}
+                - **Value range**: {analysis_series.min():.2f} to {analysis_series.max():.2f}
+                """
+            ),
+            mo.callout(
+                mo.md(
+                    f"**Live status** (`{live_status.mode}` / `{live_status.state}`): "
+                    f"{live_status.message}"
+                ),
+                kind=status_kind,
+            ),
+        ]
     )
     return
 
 
 @app.cell
-def __(series, wavelet_type, preprocess_type, min_period, max_period, n_periods):
+def __(
+    analysis_series,
+    wavelet_type,
+    preprocess_type,
+    min_period,
+    max_period,
+    n_periods,
+):
     from coinlet import cwt, log_periods
 
     periods = log_periods(
@@ -239,7 +329,7 @@ def __(series, wavelet_type, preprocess_type, min_period, max_period, n_periods)
     preprocess = preprocess_type.value if preprocess_type.value != "none" else None
 
     result = cwt(
-        series,
+        analysis_series,
         periods,
         wavelet=wavelet_type.value,
         preprocess=preprocess,
@@ -248,7 +338,7 @@ def __(series, wavelet_type, preprocess_type, min_period, max_period, n_periods)
 
 
 @app.cell
-def __(mo, result):
+def __(mo, result, live_status):
     mo.md(
         f"""
         ### Transform Result
@@ -256,22 +346,67 @@ def __(mo, result):
         - **Cache key**: `{result.cache_key()}`
         - **Power shape**: {result.power.shape} (periods × times)
         - **Wavelet**: {result.metadata.get('wavelet', 'N/A')}
+        - **Live ticks applied**: {live_status.tick_count}
         """
     )
     return
 
 
 @app.cell
-def __(result, show_coi):
-    from coinlet import create_scalogram_figure, create_surface_figure
+def __():
+    # Mutable holders so live refreshes can call update_*_data() in place
+    # instead of discarding the Plotly figures on every tick.
+    plot_figs = {"scalogram": None, "surface": None, "show_coi": None, "n_periods": None}
+    return (plot_figs,)
 
-    scalogram_fig = create_scalogram_figure(
-        result,
-        log_period=True,
-        show_coi=show_coi.value,
-        title="Wavelet Scalogram (2D)",
+
+@app.cell
+def __(result, show_coi, plot_figs):
+    from coinlet import (
+        create_scalogram_figure,
+        create_surface_figure,
+        update_scalogram_data,
+        update_surface_data,
     )
-    return create_scalogram_figure, create_surface_figure, scalogram_fig
+
+    recreate = (
+        plot_figs["scalogram"] is None
+        or plot_figs["show_coi"] != show_coi.value
+        or plot_figs["n_periods"] != len(result.periods)
+    )
+
+    if recreate:
+        plot_figs["scalogram"] = create_scalogram_figure(
+            result,
+            log_period=True,
+            show_coi=show_coi.value,
+            title="Wavelet Scalogram (2D)",
+        )
+        plot_figs["surface"] = create_surface_figure(
+            result,
+            log_period=True,
+            title="Wavelet Power Spectrum (3D)",
+        )
+        plot_figs["show_coi"] = show_coi.value
+        plot_figs["n_periods"] = len(result.periods)
+    else:
+        update_scalogram_data(
+            plot_figs["scalogram"],
+            result,
+            show_coi=show_coi.value,
+        )
+        update_surface_data(plot_figs["surface"], result)
+
+    scalogram_fig = plot_figs["scalogram"]
+    surface_fig = plot_figs["surface"]
+    return (
+        create_scalogram_figure,
+        create_surface_figure,
+        update_scalogram_data,
+        update_surface_data,
+        scalogram_fig,
+        surface_fig,
+    )
 
 
 @app.cell
@@ -284,18 +419,6 @@ def __(mo, scalogram_fig):
 def __(mo, scalogram_fig):
     mo.ui.plotly(scalogram_fig)
     return
-
-
-@app.cell
-def __(result):
-    from coinlet import create_surface_figure
-
-    surface_fig = create_surface_figure(
-        result,
-        log_period=True,
-        title="Wavelet Power Spectrum (3D)",
-    )
-    return (surface_fig,)
 
 
 @app.cell
